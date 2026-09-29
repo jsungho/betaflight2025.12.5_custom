@@ -20,6 +20,7 @@
 | STM32F7X2 | `betaflight_2025.12.5_STM32F7X2_CHIMERA7_custom_v3.hex` | CHIMERA7 |
 | STM32F7X2 | `betaflight_2025.12.5_STM32F7X2_AOSUL7X8_custom_v3.hex` | AOS UL7 X8 |
 | STM32F7X2 | `betaflight_2025.12.5_STM32F7X2_EXPLORERLR4_custom_v3.hex` | EXPLORER LR4 |
+| STM32F7X2 | `betaflight_2025.12.5_STM32F7X2_PAVO25V2_custom_v3.hex` | Pavo25 V2 (JHEF7DUAL, 듀얼자이로) |
 | STM32H743 | `betaflight_2025.12.5_STM32H743_X8_5INCH_custom_v3.hex` | X8 5INCH |
 
 같은 MCU를 쓰는 기체는 동일한 hex 파일을 사용하며, 보드별 리소스 매핑은 각 기체의 CLI DIFF ALL(`BTFL_cli_*.txt`, 프로젝트 문서 참고)로 런타임에 적용됩니다.
