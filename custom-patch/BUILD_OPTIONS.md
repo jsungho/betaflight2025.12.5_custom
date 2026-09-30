@@ -3,8 +3,7 @@
 베이스: `jsungho/betaflight2025.12.5_custom` / 브랜치 `custom-patch/alt-hold-throttle-range`
 커스텀 패치(4종): `alt_hold_full_low_is_max_descend`, `alt_hold_deadband_low`, `alt_hold_hover_throttle`, `landing_disarm_airmode_off_only` (참고: betaflight/betaflight#15775)
 
-기존 hex는 **통합 타겟(MCU 단위, 예: `make STM32F7X2`)** 으로 빌드해서 그 MCU를 쓰는 모든 보드가 같은 바이너리를 공유했다.
-이 빌드는 **보드별(`make <보드이름>`)** 로 바꿔서, 그 보드/기체가 실제로 쓰지 않는 기능을 빼 플래시 사용량 자체를 줄였다.
+이 저장소의 펌웨어는 **보드별(`make <보드이름>`)** 로 빌드해서, 그 보드/기체가 실제로 쓰지 않는 기능을 빼 플래시 사용량을 줄였다(이전에 있던 통합 타겟(MCU 단위) hex는 제거되었다).
 결과 파일은 기체 이름이 들어간 hex(`..._custom_v3_slim.hex`)이며, **각 기체에 맞는 파일 하나만** 올려야 한다.
 
 ## 기체별 빌드옵션 표
@@ -32,24 +31,20 @@
 주석
 1. 8IN-KOPIS_X8, Pavo25 V2는 CLI에 `feature LED_STRIP`이 켜져 있지만 `resource LED_STRIP 1 NONE`으로 핀이 비어 있고 LED 정의도 없어 LED 스트립을 뺐다.
 
-## F722에서 추가 옵션이 필요한 이유 (정정: 2026-09-30)
+## F722에서 추가 옵션이 필요한 이유
 
 2025.12.5 업스트림은 `common_pre.h`의 `TARGET_FLASH_SIZE >= 1024` 조건 안에서만 `USE_ALTITUDE_HOLD` / `USE_POSITION_HOLD` / `USE_GPS` / `USE_LED_STRIP`를 켠다.
 
-**이전 버전 문서는 "통합(MCU 단위) 빌드는 이 조건을 자동으로 충족한다"고 적었지만, 이는 사실이 아니었다.** 직접 확인한 결과:
+`TARGET_FLASH_SIZE`는 `Makefile`에서 `MCU_FLASH_SIZE`(`STM32F7.mk`가 `STM32F722xx` → `512`로 고정)를 그대로 상속하며, 이 값은 `USE_CONFIG`(보드별/통합 여부)와 무관하다 — `TARGET_FLASH_SIZE >= 1024` 게이트 자체가 `USE_CONFIG` 조건절 밖에 있다. 직접 확인한 결과:
 
 ```
 make TARGET=STM32F7X2 fwo -n   → -DTARGET_FLASH_SIZE=512
 make CONFIG=MATEKF722SE fwo -n → -DTARGET_FLASH_SIZE=512   (동일)
 ```
 
-`TARGET_FLASH_SIZE`는 `Makefile`에서 `MCU_FLASH_SIZE`(`STM32F7.mk`가 `STM32F722xx` → `512`로 고정)를 그대로 상속하며, 이 값은 `USE_CONFIG`(보드별/통합 여부)와 무관하다 — `TARGET_FLASH_SIZE >= 1024` 게이트 자체가 `USE_CONFIG` 조건절 밖에 있다.
+즉 **F722(512KB)는 이 조건을 충족하지 못해 Alt Hold/Position Hold/GPS/LED 스트립이 기본적으로 빠진다.** 그래서 이 저장소의 F722 기체 빌드는 `-DUSE_ALTITUDE_HOLD -DUSE_GPS -DUSE_POSITION_HOLD`를 명시해서 F722 기체에 Alt Hold/Position Hold를 켰다. 실제로 검증한 결과 F722 기체 전부 71~76% 사용(hex 실측)으로, 다른 미사용 기능을 뺀 여유분 안에 들어간다.
 
-즉 **F722(512KB)는 통합 빌드든 보드별 빌드든 상관없이 이 조건을 충족하지 못해 Alt Hold/Position Hold/GPS/LED 스트립이 기본적으로 빠진다.** 실제로 기존 `firmware/v3/`의 F722 hex 6개(TJRC_10, 8IN-KOPIS_X8, CHIMERA7, AOS_UL7_X8, Explorer LR4, Pavo25 V2)를 디코딩해 확인한 결과 `alt_hold_deadband`/`pos_hold_deadband` 문자열이 전혀 없었다 — 기존 통합 타겟 hex에도 Alt Hold/Position Hold가 없었다는 뜻이다.
-
-반면 F405(1MB)/H743(2MB)는 `MCU_FLASH_SIZE`가 1024/2048로 조건을 항상 충족하므로 통합/보드별 관계없이 원래부터 포함되어 있었다.
-
-그래서 이번 보드별 빌드에서는 F722 기체마다 `-DUSE_ALTITUDE_HOLD -DUSE_GPS -DUSE_POSITION_HOLD`를 명시해서 **F722 기체에 Alt Hold/Position Hold를 처음으로 추가**했다. 실제로 검증한 결과 F722 기체 전부 71~76% 사용(hex 실측)으로, 다른 미사용 기능을 뺀 여유분 안에 들어간다.
+F405(1MB)/H743(2MB)는 `MCU_FLASH_SIZE`가 1024/2048로 조건을 항상 충족하므로 별도 플래그 없이도 포함된다.
 
 ## 빌드 방법
 
