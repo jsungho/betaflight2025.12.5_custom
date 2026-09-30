@@ -61,8 +61,8 @@ F405/H743 기체(MARIO5, AOS_UL7_O4, Mark4_6in, X8_5INCH)는 MCU 플래시가 1M
 set alt_hold_deadband_low = 10
 set alt_hold_full_low_is_max_descend = ON
 
-# Alt Hold 전용 호버 스로틀 (0 = 사용 안 함)
-set alt_hold_hover_throttle = 1300
+# Alt Hold 전용 호버 스로틀 (0 = 사용 안 함, 권장 기본값은 3-1절 참고: 1400)
+set alt_hold_hover_throttle = 1400
 
 # EZ Disarm을 Airmode OFF일 때만 (프로파일별)
 profile 0
@@ -84,7 +84,8 @@ save
 | `ez_landing_threshold` | `30` | 이 값 이하 스로틀에서 EZ Landing 제한이 걸리기 시작하는 임계값 |
 | `min_check` | `1050` | 스로틀 로우엔드 체크 값(이 값 미만 = 스로틀 로우로 판정) |
 | `alt_hold_climb_rate` | `70` | Alt Hold 상승 속도(cm/s 단위 스케일) |
-| `alt_hold_deadband` | `10` | Alt Hold 상승 쪽(HIGH) 데드밴드. 이 저장소가 추가한 `alt_hold_deadband_low`(하강 쪽)와 쌍을 이룸 |
+| `alt_hold_deadband` | `25` | Alt Hold 상승 쪽(HIGH) 데드밴드. 이 저장소가 추가한 `alt_hold_deadband_low`(하강 쪽)와 쌍을 이룸 |
+| `alt_hold_hover_throttle` | `1400` | 이 저장소가 추가한 Alt Hold/Position Hold 전용 호버 스로틀(3절 참고). `ap_hover_throttle` 상속 대신 1400을 고정값으로 사용 |
 | `gps_rescue_descend_rate` | `135` | GPS Rescue 하강 속도 |
 | `gps_rescue_disarm_threshold` | `60` | GPS Rescue 착지 판정 후 디스암 임계값(가속도 저크) |
 | `gps_rescue_use_mag` | `ON` | GPS Rescue 시 자력계 헤딩 사용(자력계 없는 Pavo25 V2는 해당 없음 — 아래 주 참고) |
@@ -103,7 +104,8 @@ set gps_rescue_use_mag = ON
 set pos_hold_without_mag = OFF
 set landing_disarm_threshold = 0
 set gps_rescue_descend_rate = 135
-set alt_hold_deadband = 10
+set alt_hold_deadband = 25
+set alt_hold_hover_throttle = 1400
 save
 ```
 
