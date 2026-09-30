@@ -682,3 +682,113 @@ extern struct linker_symbol __config_end;
 #endif
 #endif // USE_PINIO
 
+// custom-patch: build-time removal of features the pilot does not use.
+// Enabled per board with -DCUSTOM_NO_xxx (see custom-patch/build_custom.sh and custom-patch/BUILD_OPTIONS.md).
+// Must stay at the very end so it also removes options derived earlier in this file.
+#ifdef CUSTOM_NO_PINIO
+#undef USE_PINIO
+#undef USE_PINIOBOX
+#endif
+
+#ifdef CUSTOM_NO_VTX
+#undef USE_VTX
+#undef USE_VTX_COMMON
+#undef USE_VTX_CONTROL
+#undef USE_VTX_SMARTAUDIO
+#undef USE_VTX_TRAMP
+#undef USE_VTX_MSP
+#undef USE_VTX_TABLE
+#undef USE_VTX_RTC6705
+#undef USE_VTX_RTC6705_SOFTSPI
+#endif
+
+#ifdef CUSTOM_NO_TRANSPONDER
+#undef USE_TRANSPONDER
+#endif
+
+#ifdef CUSTOM_NO_RANGEFINDER
+#undef USE_RANGEFINDER
+#undef USE_RANGEFINDER_HCSR04
+#undef USE_RANGEFINDER_TF
+#undef USE_RANGEFINDER_MT
+#undef USE_RANGEFINDER_NOOPLOOP
+#undef USE_RANGEFINDER_UPT1
+#undef USE_OPTICALFLOW
+#undef USE_OPTICALFLOW_MT
+#undef USE_OPTICALFLOW_UPT1
+#endif
+
+#ifdef CUSTOM_NO_DASHBOARD
+#undef USE_DASHBOARD
+#endif
+
+#ifdef CUSTOM_NO_SIMONK
+#undef USE_ESCSERIAL_SIMONK
+#undef USE_SERIAL_4WAY_SK_BOOTLOADER
+#endif
+
+#ifdef CUSTOM_NO_GPS_EXTRAS
+#undef USE_GPS_LAP_TIMER
+#undef USE_GPS_PLUS_CODES
+#endif
+
+#ifdef CUSTOM_NO_LAUNCH_CONTROL
+#undef USE_LAUNCH_CONTROL
+#endif
+
+#ifdef CUSTOM_NO_LED_STRIP
+#undef USE_LED_STRIP
+#undef USE_LED_STRIP_STATUS_MODE
+#endif
+
+// Serial RX protocols other than CRSF / SBUS / FPort
+#ifdef CUSTOM_NO_RX_OTHER
+#undef USE_SERIALRX_GHST
+#undef USE_SERIALRX_IBUS
+#undef USE_SERIALRX_SPEKTRUM
+#undef USE_SPEKTRUM_BIND
+#undef USE_SPEKTRUM_BIND_PLUG
+#undef USE_SPEKTRUM_REAL_RSSI
+#undef USE_SPEKTRUM_VIRTUAL_RSSI
+#undef USE_SPEKTRUM_RSSI_PERCENT_CONVERSION
+#undef USE_SPEKTRUM_VTX_CONTROL
+#undef USE_SPEKTRUM_VTX_TELEMETRY
+#undef USE_SPEKTRUM_CMS_TELEMETRY
+#undef USE_SERIALRX_XBUS
+#undef USE_SERIALRX_SRXL2
+#undef USE_SERIALRX_JETIEXBUS
+#undef USE_SERIALRX_SUMD
+#undef USE_SERIALRX_SUMH
+#undef USE_SERIALRX_MAVLINK
+#endif
+#ifdef CUSTOM_NO_RX_SBUS
+#undef USE_SERIALRX_SBUS
+#endif
+#ifdef CUSTOM_NO_RX_FPORT
+#undef USE_SERIALRX_FPORT
+#endif
+#ifdef CUSTOM_NO_RX_CRSF
+#undef USE_SERIALRX_CRSF
+#undef USE_TELEMETRY_CRSF
+#undef USE_CRSF_V3
+#undef USE_CRSF_ACCGYRO_TELEMETRY
+#undef USE_CRSF_CMS_TELEMETRY
+#undef USE_CRSF_LINK_STATISTICS
+#endif
+
+// Telemetry protocols other than CRSF / SmartPort
+#ifdef CUSTOM_NO_TELEM_OTHER
+#undef USE_TELEMETRY_FRSKY_HUB
+#undef USE_TELEMETRY_GHST
+#undef USE_TELEMETRY_SRXL
+#undef USE_TELEMETRY_IBUS
+#undef USE_TELEMETRY_IBUS_EXTENDED
+#undef USE_TELEMETRY_JETIEXBUS
+#undef USE_TELEMETRY_MAVLINK
+#undef USE_TELEMETRY_HOTT
+#undef USE_TELEMETRY_LTM
+#endif
+#ifdef CUSTOM_NO_TELEM_SMARTPORT
+#undef USE_TELEMETRY_SMARTPORT
+#endif
+
