@@ -13,7 +13,7 @@ cd "$(dirname "$0")/.."
 
 OUT="${OUT:-$PWD/custom-patch/firmware/2025.12.5}"
 VER="2025.12.5"
-SUFFIX="custom_v6_slim"
+SUFFIX="custom_v7_slim"
 
 # ---- 모든 기체 공통으로 뺄 기능 (CLI에서 사용하지 않음, VTX 는 사용자 지시) -------------------------------
 # -DCUSTOM_NO_xxx 는 src/main/target/common_post.h 끝의 custom-patch 블록이 처리한다.

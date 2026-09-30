@@ -4,7 +4,7 @@
 커스텀 패치(4종): `alt_hold_full_low_is_max_descend`, `alt_hold_deadband_low`, `alt_hold_hover_throttle`, `landing_disarm_airmode_off_only` (참고: betaflight/betaflight#15775)
 
 이 저장소의 펌웨어는 **보드별(`make <보드이름>`)** 로 빌드해서, 그 보드/기체가 실제로 쓰지 않는 기능을 빼 플래시 사용량을 줄였다(이전에 있던 통합 타겟(MCU 단위) hex는 제거되었다).
-결과 파일은 기체 이름이 들어간 hex(`..._custom_v6_slim.hex`)이며, **각 기체에 맞는 파일 하나만** 올려야 한다.
+결과 파일은 기체 이름이 들어간 hex(`..._custom_v7_slim.hex`)이며, **각 기체에 맞는 파일 하나만** 올려야 한다.
 
 **v4: 서보(USE_SERVOS)와 배터리-컨티뉴(USE_BATTERY_CONTINUE)를 전 기체에서 제거했고, OSD는 디지털(MSP DisplayPort 등, `USE_OSD_HD`)만 남기고 아날로그 OSD(`USE_OSD_SD`)와 MAX7456 드라이버(`USE_MAX7456`)를 제거했다.** 사용자 지시(2026-09): 이 저장소의 기체는 전부 디지털 VTX(Walksnail 등)만 쓰고 서보/아날로그 OSD를 쓰지 않음.
 
@@ -180,6 +180,53 @@ bool altHoldRequestActive(bool switchOn)
 
 검증: 전 기체 재빌드(hex 10개, `_v6_slim` 접미사) 성공, 컴파일 경고/오류 없음, 플래시 오버플로 없음(24.35~78.90% 사용). 4개 커스텀 CLI 파라미터, 자력계, `"ALT WAIT"` 문자열이 hex 바이너리에 그대로 포함됨을 확인. `#pragma message` 진단(임시, 검증 후 원복)으로 `ALT_HOLD_EXIT_HOVER_BAND_PWM`이 전처리기 단계에서 실제로 정의됨을 확인.
 
+## v7: 해제 대기 — 호버 구간 건너뜀 결함 수정 + 시뮬레이션 테스트
+
+**원본**: `jsungho/betaflight2026.6.x_custom` 브랜치 `custom-patch/alt-hold-throttle-range-2026.6.2` 커밋 `415e8c4`("Alt Hold exit hold: release when stick crosses hover (fast flick); sim tests")를 2025.12.5 코드 구조에 맞게 이식.
+
+**문제**: v6의 해제 대기는 매 사이클(100Hz, 10ms 간격) `|스틱 - ap_hover_throttle| <= 50`인지만 검사했다. 조종자가 스틱을 매우 빠르게 움직이면, 한 사이클과 다음 사이클 사이에 스틱 값이 이 ±5% 구간을 통째로 건너뛸 수 있다(예: 한 틱엔 구간보다 한참 위, 다음 틱엔 구간보다 한참 아래) — 이 경우 구간 안에 "머무른" 샘플이 한 번도 없어 영원히 해제되지 않는 결함이 있었다.
+
+**수정**: 해제 대기가 시작되는 순간과 매 사이클마다 직전 스로틀 값(`exitPrevThrottle`)을 저장해두고, `(스틱 - ap_hover_throttle)`의 부호가 직전 샘플과 이번 샘플 사이에서 바뀌었으면(=호버 값을 가로질렀으면) 구간 안에 정확히 들어오지 않았어도 해제한다. 위쪽에서 아래로, 아래쪽에서 위로 양방향 모두 적용.
+
+```c
+// alt_hold_multirotor.c
+typedef struct {
+    ...
+    bool exitPending;
+    bool prevSwitchOn;
+    float exitPrevThrottle;   // v7: 직전 스로틀 샘플(호버 가로지름 판정용)
+} altHoldState_t;
+
+bool altHoldRequestActive(bool switchOn)
+{
+    ...
+    if (wasSwitchOn && altHold.isActive) {
+        altHold.exitPending = true;
+        altHold.exitPrevThrottle = rcCommand[THROTTLE];   // 대기 시작 시점 값으로 시드
+    }
+    if (altHold.exitPending) {
+        const uint16_t apHover = autopilotConfig()->hoverThrottle;
+        const float hoverPwm = apHover != 0 ? (float)apHover : altHold.hoverThrottle;
+        const float prevDelta = altHold.exitPrevThrottle - hoverPwm;
+        const float delta = rcCommand[THROTTLE] - hoverPwm;
+        altHold.exitPrevThrottle = rcCommand[THROTTLE];
+        // 구간 안이거나, 직전 샘플 대비 호버 값을 가로질렀으면 해제
+        if (fabsf(delta) <= ALT_HOLD_EXIT_HOVER_BAND_PWM || (prevDelta < 0.0f) != (delta < 0.0f)) {
+            altHold.exitPending = false;
+        }
+    }
+    return altHold.exitPending;
+}
+```
+
+`fc/core.c`, `osd/osd_elements.c`, `alt_hold_multirotor.h`는 v6에서 이미 반영된 구조 그대로 변경 없음 — v7은 `alt_hold_multirotor.c` 한 파일의 해제 판정 로직만 손댔다.
+
+**시뮬레이션 테스트**: 2026.6.2 저장소의 `src/test/unit/althold_unittest.cc`에 있는 `AltholdCustomSim` 테스트 스위트(해제 대기 관련 부분만)를 이 저장소의 althold 유닛테스트에 이식했다. 2025.12.5는 `autopilotGetEffectiveHoverThrottlePwm()` 같은 2026.6.2 전용 API가 없어 `autopilotConfigMutable()`/`altHoldConfigMutable()`/`rxConfigMutable()->mincheck` 등 이 저장소의 실제 `pg/autopilot.h`, `pg/alt_hold.h` 구조에 맞춰 스텁을 다시 맞췄다(`getAltitudeCm`/`getAltitudeDerivative`/`getCosTiltAngle`/`calculateThrottleStatus`를 테스트가 제어할 수 있는 외부 변수 기반으로 변경). 호스트(x86) 빌드라 실제 타깃 빌드와 무관하게 `cd src/test && make test_althold_unittest`로 바로 실행 가능하다.
+
+검증 시나리오(13개 테스트, 전부 통과): 진입 스틱 래치가 고도를 유지/해제하는 경우(3개, v5), 해제 대기가 호버 구간 밖에서는 고도를 유지하다가 `ap_hover_throttle` ±5% 진입 시 해제되는 경우, 기준이 `alt_hold_hover_throttle`이 아니라 `ap_hover_throttle`임을 구분하는 경우, 스위치를 끈 순간 스틱이 이미 구간 안이면 즉시 해제되는 경우, 빠른 스틱 이동으로 구간을 위→아래/아래→위로 건너뛰어도 해제되는 경우(v7 수정 대상), 대기 중 스위치 재투입 시 재래치되는 경우, 디스암 시 대기가 지워지는 경우, Alt Hold에 진입한 적이 없는 상태에서 스위치를 끄면 대기가 시작되지 않는 경우.
+
+검증(빌드): 전 기체 재빌드(hex 10개, `_v7_slim` 접미사) 성공, 컴파일 경고/오류 없음, 플래시 오버플로 없음(24.35~78.90% 사용, v6 대비 사실상 동일 — 필드 1개와 분기 하나 추가라 증가분 미미). 4개 커스텀 CLI 파라미터, 자력계, `"ALT WAIT"` 문자열이 hex 바이너리에 그대로 포함됨을 확인. `#pragma message` 진단(임시, 검증 후 원복)으로 `ALT_HOLD_EXIT_HOVER_BAND_PWM`이 v7 코드에서도 계속 정의됨을 확인.
+
 ## 빌드 방법
 
 ```bash
@@ -193,21 +240,23 @@ custom-patch/build_custom.sh
 custom-patch/build_custom.sh MATEKF722SE JHEF7DUAL
 ```
 
-결과는 `custom-patch/firmware/2025.12.5/`에 `betaflight_2025.12.5_<MCU>_<보드>_<기체>_custom_v6_slim.hex` 형식으로 생성된다.
+결과는 `custom-patch/firmware/2025.12.5/`에 `betaflight_2025.12.5_<MCU>_<보드>_<기체>_custom_v7_slim.hex` 형식으로 생성된다.
 
 ## 검증한 내용
 
-- 전 기체 빌드/링크 성공 (플래시 오버플로 없음, v6 기준 24.35~78.90% 사용)
+- 전 기체 빌드/링크 성공 (플래시 오버플로 없음, v7 기준 24.35~78.90% 사용)
 - 서보/배터리-컨티뉴/아날로그 OSD(MAX7456) 제거 후에도 4개 커스텀 CLI 파라미터, Alt Hold/Position Hold, 자력계(Pavo25 V2 제외)가 hex 문자열 검색으로 전부 유지됨을 확인
 - 4개 커스텀 CLI 파라미터(`alt_hold_deadband_low`, `alt_hold_full_low_is_max_descend`, `alt_hold_hover_throttle`, `landing_disarm_airmode_off_only`) 문자열이 전 기체 바이너리에 포함됨을 확인
 - `altHoldInit`, `updatePosHold` 심볼로 Alt Hold / Position Hold가 전 기체(F405/F722/H743)에 실제로 링크됨을 확인
 - 자력계 심볼(`compassConfig` 등) 존재 여부로 Pavo25 V2만 자력계가 빠졌고 나머지는 포함됨을 확인 (Explorer LR4: 5개 심볼 존재 vs Pavo25 V2 재현 빌드: 0개)
 - Alt Hold 진입 스틱 래치(v5): `#pragma message` 진단으로 `ALT_HOLD_ENTRY_LATCH_RELEASE_PWM`이 전처리기 단계에서 정의됨을 확인.
 - Alt Hold 해제 대기 + OSD "ALT WAIT"(v6): `"ALT WAIT"` 문자열이 전 기체 hex에 포함됨을 확인, `#pragma message` 진단으로 `ALT_HOLD_EXIT_HOVER_BAND_PWM`이 전처리기 단계에서 정의됨을 확인.
-- 실비행 동작(래치 해제 타이밍, 해제 대기 해제 타이밍, OSD 표시 등)은 벤치·비행 시험으로 별도 검증 필요
+- 해제 대기의 호버 구간 건너뜀 결함 수정(v7): 호스트 유닛테스트(`src/test/unit/althold_unittest.cc`, `AltholdCustomSim` 스위트) 13개 전부 통과 — 진입 래치/해제 대기/구간 건너뜀(위·아래 양방향)/스위치 재투입/디스암 시나리오를 시뮬레이션으로 확인. 전 기체 재빌드에서 `"ALT WAIT"` 문자열·4개 CLI 파라미터 유지, `#pragma message` 진단으로 `ALT_HOLD_EXIT_HOVER_BAND_PWM`이 v7 코드에서도 계속 정의됨을 확인.
+- 실비행 동작(래치 해제 타이밍, 해제 대기 해제 타이밍, 빠른 스틱 이동 시 실제 가로지름 판정, OSD 표시 등)은 벤치·비행 시험으로 별도 검증 필요 — 유닛테스트는 로직 검증이지 IMU/RC 잡음·스케줄러 타이밍까지 반영한 검증은 아님
 
 ## 사용상 주의
 
 - 보드가 다르면 잘못된 hex다. 같은 MCU라도 보드별 파일이 다르므로 기체와 파일명을 확인한 뒤 플래시한다.
 - 플래시 후 기존 CLI diff(프로젝트 문서 보관분)를 재적용해야 한다.
 - 컴파일·링크·심볼 확인까지만 했고 기체 부팅과 비행은 검증하지 않았다. 프롭 제거 벤치 테스트를 먼저 한다.
+- **해제 대기(v6/v7) 중에는 `ALT_HOLD_MODE`가 계속 켜진 상태다.** 즉 자세 제어는 앵글(자동 수평) 그대로이고, 대기 중 스로틀 스틱을 내려도 고도가 내려가지 않는다(목표 고도를 그대로 유지) — 설계된 동작이므로 놀라지 말 것. 스틱이 `ap_hover_throttle` ±5% 안에 들어오거나 그 값을 가로질러야 해제된다.

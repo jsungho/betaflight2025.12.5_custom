@@ -65,6 +65,7 @@ typedef struct {
     float entryThrottle; // custom-patch: rcCommand[THROTTLE] captured on entry
     bool exitPending;    // custom-patch: switch is off, still holding altitude until stick reaches hover
     bool prevSwitchOn;   // custom-patch: previous state of the Alt Hold switch request
+    float exitPrevThrottle; // custom-patch: previous throttle sample while exit hold is pending (band crossing check)
 } altHoldState_t;
 
 altHoldState_t altHold;
@@ -230,6 +231,7 @@ bool altHoldRequestActive(bool switchOn)
     if (wasSwitchOn && altHold.isActive) {
         // switch just turned off while Alt Hold was active: keep holding unless the stick is already at hover
         altHold.exitPending = true;
+        altHold.exitPrevThrottle = rcCommand[THROTTLE];
     }
 
     if (altHold.exitPending) {
@@ -238,8 +240,13 @@ bool altHoldRequestActive(bool switchOn)
         // hover value (altHold.hoverThrottle, computed in altHoldInit from alt_hold_hover_throttle/ap_hover_throttle)
         const uint16_t apHover = autopilotConfig()->hoverThrottle;
         const float hoverPwm = apHover != 0 ? (float)apHover : altHold.hoverThrottle;
-        if (fabsf(rcCommand[THROTTLE] - hoverPwm) <= ALT_HOLD_EXIT_HOVER_BAND_PWM) {
-            altHold.exitPending = false;   // stick at hover: release to manual throttle
+        const float prevDelta = altHold.exitPrevThrottle - hoverPwm;
+        const float delta = rcCommand[THROTTLE] - hoverPwm;
+        altHold.exitPrevThrottle = rcCommand[THROTTLE];
+        // custom-patch: release when the stick is inside the band, or has crossed hover since the last sample
+        // (a fast stick flick can jump clean over the +/-5% band between two samples, skipping it entirely)
+        if (fabsf(delta) <= ALT_HOLD_EXIT_HOVER_BAND_PWM || (prevDelta < 0.0f) != (delta < 0.0f)) {
+            altHold.exitPending = false;   // stick at/through hover: release to manual throttle
         }
     }
     return altHold.exitPending;

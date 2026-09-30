@@ -18,6 +18,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <limits.h>
+#include <string.h>
 
 extern "C" {
 
@@ -33,6 +34,7 @@ extern "C" {
     #include "fc/runtime_config.h"
 
     #include "flight/alt_hold.h"
+    #include "flight/autopilot.h"
     #include "flight/failsafe.h"
     #include "flight/imu.h"
     #include "flight/pid.h"
@@ -58,6 +60,10 @@ extern "C" {
     bool failsafeIsActive(void) { return false; }
     timeUs_t currentTimeUs = 0;
     bool isAltHoldActive();
+    extern float testAltitudeCm;
+    extern float testAltitudeDerivativeCmS;
+    extern float testCosTiltAngle;
+    extern throttleStatus_e testThrottleStatus;
 }
 
 #include "unittest_macros.h"
@@ -100,6 +106,175 @@ TEST(AltholdUnittest, altHoldTransitionsTestUnfinishedExitEnter)
     EXPECT_EQ(isAltHoldActive(), true);
 }
 
+// ---- custom-patch: entry latch / exit hold simulation ----
+// Ported from jsungho/betaflight2026.6.x_custom, custom-patch/alt-hold-throttle-range-2026.6.2,
+// commit 415e8c4 (AltholdCustomSim), adapted to the 2025.12.5 autopilot_multirotor.c API
+// (this repo's altitudeControl()/getAutopilotThrottle() signatures and pg/autopilot.h layout).
+extern "C" {
+    bool altHoldRequestActive(bool switchOn);
+    void altHoldClearExitPending(void);
+    bool isAltHoldExitPending(void);
+}
+
+class AltholdCustomSim : public ::testing::Test {
+protected:
+    bool armed = true;
+    void SetUp() override {
+        memset(rcCommand, 0, sizeof(rcCommand));
+        flightModeFlags = 0;
+        testAltitudeCm = 0.0f;
+        testAltitudeDerivativeCmS = 0.0f;
+        testCosTiltAngle = 1.0f;
+        testThrottleStatus = THROTTLE_HIGH;
+        autopilotConfigMutable()->hoverThrottle = 1300;   // ap_hover_throttle
+        autopilotConfigMutable()->throttleMin = 1100;
+        autopilotConfigMutable()->throttleMax = 1900;
+        autopilotConfigMutable()->altitudeP = 15;
+        autopilotConfigMutable()->altitudeI = 15;
+        autopilotConfigMutable()->altitudeD = 15;
+        altHoldConfigMutable()->hoverThrottle = 1400;     // alt_hold_hover_throttle
+        altHoldConfigMutable()->deadband = 25;
+        altHoldConfigMutable()->deadbandLow = 0;
+        altHoldConfigMutable()->fullLowIsMaxDescend = true;
+        altHoldConfigMutable()->climbRate = 70;
+        rxConfigMutable()->mincheck = 1050;
+        autopilotInit();
+        altHoldInit();
+        altHoldClearExitPending();
+        resetAltitudeControl();
+    }
+    // one 100 Hz cycle: emulate fc/core.c's Alt Hold mode decision, then the Alt Hold task
+    void step(bool sw, float stick) {
+        rcCommand[THROTTLE] = stick;
+        testThrottleStatus = stick < 1050 ? THROTTLE_LOW : THROTTLE_HIGH;
+        if (armed && altHoldRequestActive(sw)) {
+            flightModeFlags |= ALT_HOLD_MODE;
+        } else {
+            flightModeFlags &= ~ALT_HOLD_MODE;
+            altHoldClearExitPending();
+        }
+        updateAltHold(currentTimeUs);
+    }
+    void run(bool sw, float stick, int n) { for (int i = 0; i < n; i++) step(sw, stick); }
+    float thrPwm() const { return 1000.0f + 1000.0f * getAutopilotThrottle(); }
+    bool modeOn() const { return flightModeFlags & ALT_HOLD_MODE; }
+};
+
+TEST_F(AltholdCustomSim, EntryLatchHoldsAltitudeWhileStickBelowHover)
+{
+    run(true, 1200, 300);             // enter with stick well below hover(1400), 3 s
+    EXPECT_TRUE(isAltHoldActive());
+    const float held = thrPwm();
+    EXPECT_GT(held, 1350.0f);          // holding: no descent despite stick < hover
+    run(true, 1230, 300);              // +30us (<5%): still latched
+    EXPECT_GT(thrPwm(), 1350.0f);
+}
+
+TEST_F(AltholdCustomSim, EntryLatchReleasesAt5PercentAndAbsolutePositionApplies)
+{
+    run(true, 1200, 100);
+    run(true, 1140, 300);              // moved 60us (>=50): released, stick below hover => descend
+    EXPECT_LT(thrPwm(), 1300.0f);
+}
+
+TEST_F(AltholdCustomSim, EntryLatchIgnoresFullLowMaxDescendUntilMoved)
+{
+    run(true, 1000, 300);              // THROTTLE_LOW at entry, fullLowIsMaxDescend ON
+    EXPECT_GT(thrPwm(), 1350.0f);   // still holding
+    run(true, 1040, 300);              // +40: still latched
+    EXPECT_GT(thrPwm(), 1350.0f);
+    run(true, 1060, 300);              // +60: released, stick below threshold => max descend
+    EXPECT_LT(thrPwm(), 1300.0f);
+}
+
+TEST_F(AltholdCustomSim, ExitHoldKeepsAltitudeUntilStickReachesApHoverBand)
+{
+    run(true, 1400, 100);
+    run(false, 1100, 1);               // switch off, stick far below ap_hover(1300)
+    EXPECT_TRUE(isAltHoldExitPending());
+    EXPECT_TRUE(modeOn());
+    run(false, 1150, 200);
+    EXPECT_TRUE(modeOn());
+    EXPECT_GT(thrPwm(), 1350.0f);   // altitude still held, not following stick
+    run(false, 1240, 10);              // 1240 < 1250: just outside band
+    EXPECT_TRUE(modeOn());
+    run(false, 1255, 1);               // inside 1300 +/- 50
+    EXPECT_FALSE(modeOn());
+    EXPECT_FALSE(isAltHoldExitPending());
+}
+
+TEST_F(AltholdCustomSim, ExitHoldUsesApHoverNotAltHoldHover)
+{
+    run(true, 1400, 100);
+    run(false, 1500, 1);               // above both hover values
+    run(false, 1380, 5);               // inside alt_hold_hover(1400) band, outside ap_hover(1300) band, no crossing
+    EXPECT_TRUE(modeOn());
+    run(false, 1360, 5);               // still above ap_hover + 50
+    EXPECT_TRUE(modeOn());
+    run(false, 1300, 1);               // inside ap_hover band
+    EXPECT_FALSE(modeOn());
+}
+
+TEST_F(AltholdCustomSim, ExitHoldImmediateWhenStickAlreadyAtHover)
+{
+    run(true, 1400, 100);
+    run(false, 1310, 1);
+    EXPECT_FALSE(modeOn());
+    EXPECT_FALSE(isAltHoldExitPending());
+}
+
+TEST_F(AltholdCustomSim, ExitHoldReleasesWhenStickSkipsBandQuickly)
+{
+    run(true, 1400, 100);
+    run(false, 1100, 1);
+    run(false, 1100, 50);
+    EXPECT_TRUE(modeOn());
+    run(false, 1500, 1);               // fast flick straight across the band in one sample
+    EXPECT_FALSE(modeOn());
+}
+
+TEST_F(AltholdCustomSim, ExitHoldReleasesWhenStickSkipsBandDownward)
+{
+    run(true, 1400, 100);
+    run(false, 1600, 1);
+    run(false, 1600, 50);
+    EXPECT_TRUE(modeOn());
+    run(false, 1000, 1);
+    EXPECT_FALSE(modeOn());
+}
+
+TEST_F(AltholdCustomSim, SwitchBackOnDuringExitHoldRelatches)
+{
+    run(true, 1400, 100);
+    run(false, 1100, 50);
+    EXPECT_TRUE(isAltHoldExitPending());
+    run(true, 1100, 300);              // switch on again: fresh entry latch at 1100
+    EXPECT_FALSE(isAltHoldExitPending());
+    EXPECT_TRUE(modeOn());
+    EXPECT_GT(thrPwm(), 1300.0f);   // no descent from the low stick
+}
+
+TEST_F(AltholdCustomSim, DisarmClearsExitHold)
+{
+    run(true, 1400, 100);
+    run(false, 1100, 50);
+    EXPECT_TRUE(isAltHoldExitPending());
+    armed = false;
+    step(false, 1100);
+    EXPECT_FALSE(isAltHoldExitPending());
+    EXPECT_FALSE(modeOn());
+    armed = true;
+    step(false, 1100);                 // switch still off after re-arm: must not resume hold
+    EXPECT_FALSE(modeOn());
+}
+
+TEST_F(AltholdCustomSim, SwitchOffWhileNotActiveDoesNotStartExitHold)
+{
+    run(false, 1100, 50);              // never entered
+    EXPECT_FALSE(isAltHoldExitPending());
+    EXPECT_FALSE(modeOn());
+}
+
 // STUBS
 
 extern "C" {
@@ -113,9 +288,14 @@ extern "C" {
     attitudeEulerAngles_t attitude;
     gpsSolutionData_t gpsSol;
 
-    float getAltitudeCm(void) { return 0.0f; }
-    float getAltitudeDerivative(void) { return 0.0f; }
-    float getCosTiltAngle(void) { return 0.0f; }
+    float testAltitudeCm = 0.0f;
+    float testAltitudeDerivativeCmS = 0.0f;
+    float testCosTiltAngle = 1.0f;
+    throttleStatus_e testThrottleStatus = THROTTLE_LOW;
+
+    float getAltitudeCm(void) { return testAltitudeCm; }
+    float getAltitudeDerivative(void) { return testAltitudeDerivativeCmS; }
+    float getCosTiltAngle(void) { return testCosTiltAngle; }
     float getGpsDataIntervalSeconds(void) { return 0.01f; }
     float getGpsDataFrequencyHz(void) { return 10.0f; }
     float rcCommand[4];
@@ -133,6 +313,6 @@ extern "C" {
     }
 
     throttleStatus_e calculateThrottleStatus() {
-        return THROTTLE_LOW;
+        return testThrottleStatus;
     }
 }
