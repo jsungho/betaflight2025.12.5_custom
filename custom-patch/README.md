@@ -27,7 +27,10 @@
 
 보드가 다르면 잘못된 hex다. MARIO5와 AOS_UL7_O4는 같은 FC(SPEEDYBEEF405V4), Pavo25 V2와 Explorer LR4는 같은 FC(JHEF7DUAL)라서 파일명 라벨(MARIO5 / AOSUL7O4 / PAVO25V2 / EXPLORERLR4)까지 확인해야 한다. 파일명의 보드 이름이 기체 FC와 같은지 확인한 뒤 Betaflight Configurator의 **Load Firmware [Local]**로 올린다.
 
-기존 `firmware/v3/`의 통합 타겟 hex보다 플래시 사용량이 낮다(F722 기준 81~86% → 76~81%). 기능상 차이는 없다(4개 커스텀 CLI 파라미터, Alt Hold/Position Hold 전부 동일하게 포함) — 안 쓰는 기능(VTX, 레인지파인더, SimonK, 안 쓰는 수신기 프로토콜 등)만 빠졌다.
+기존 `firmware/v3/`의 통합 타겟 hex보다 플래시 사용량이 낮다(F722 기준 88.5% → 71~76%).
+
+**F722 기체는 기능이 다르다 — 기존 `firmware/v3`에는 Alt Hold/Position Hold가 빠져 있었다.** `TARGET_FLASH_SIZE >= 1024` 조건은 통합/보드별 빌드 방식과 무관하게 실제 MCU 플래시(F722=512KB)를 그대로 반영하므로, F722 기체(TJRC_10, 8IN-KOPIS_X8, CHIMERA7, AOS_UL7_X8, Explorer LR4, Pavo25 V2)는 기존 통합 타겟 hex에도 Alt Hold/Position Hold가 컴파일되어 있지 않았다(직접 hex 디코딩으로 확인: `alt_hold_deadband`/`pos_hold_deadband` 문자열 없음). 이번 보드별 빌드가 F722 기체에 Alt Hold/Position Hold를 **처음으로** 추가한 것이다.
+F405/H743 기체(MARIO5, AOS_UL7_O4, Mark4_6in, X8_5INCH)는 원래 MCU 플래시가 1MB/2MB로 충분해 기존 hex에도 Alt Hold/Position Hold가 포함되어 있었고, 이번에도 동일하게 유지된다. 4개 커스텀 CLI 파라미터는 전 기체 공통으로 유지되며, 그 외 안 쓰는 기능(VTX, 레인지파인더, SimonK, 안 쓰는 수신기 프로토콜 등)만 빠졌다.
 
 ## 2. 플래시 절차
 

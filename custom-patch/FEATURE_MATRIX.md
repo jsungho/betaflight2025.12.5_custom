@@ -16,6 +16,8 @@
 | **Pavo25 V2** | JHEF7DUAL | F722 | **제거 (센서 없음)** | 포함 | 제거 | CRSF | CRSF | 포함 | 75.5% |
 | X8_5INCH | MATEKH743 | H743 | 포함 | 제거 | 포함 | FPort | SmartPort | 포함 | 25.0% |
 
+> **정정 (2026-09-30)**: F722 기체(TJRC_10 ~ Pavo25 V2)는 기존 `firmware/v3` 통합 타겟 hex에도 Alt Hold/Position Hold가 없었다(`TARGET_FLASH_SIZE`=512는 빌드 방식과 무관하게 항상 조건 미충족). 이 표의 F722 기체용 "Alt/Pos Hold 포함"은 이번 보드별 빌드에서 `-DUSE_ALTITUDE_HOLD -DUSE_GPS -DUSE_POSITION_HOLD`로 **새로 추가**한 것이다. 자세한 근거는 [BUILD_OPTIONS.md](BUILD_OPTIONS.md)의 "F722에서 추가 옵션이 필요한 이유" 참고.
+
 ## 공통 사항 (전 기체)
 
 - 커스텀 CLI 4종 전부 포함: `alt_hold_deadband_low`, `alt_hold_full_low_is_max_descend`, `alt_hold_hover_throttle`, `landing_disarm_airmode_off_only`
