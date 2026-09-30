@@ -72,6 +72,45 @@ save
 
 설정값 확인: `get alt_hold` / `get landing_disarm`
 
+## 3-1. 권장 기본 CLI 값 (GPS Rescue / EZ Landing / Alt Hold)
+
+플래시·`diff all` 복원 후, 아래 값을 기본값으로 적용한다(전 기체 공통, 사용자 확정).
+
+| 파라미터 | 값 | 설명 |
+|---|---|---|
+| `gps_ublox_flight_model` | `AIRBORNE_1G` | u-blox GPS 동적 모델. 저가속(≤1g) 항공기용 — GPS Rescue/Position Hold의 GPS 필터링 특성에 영향 |
+| `mixer_type` | `EZLANDING` | EZ Landing 모터 믹서 사용(착륙 시 모터 출력 제한) |
+| `ez_landing_limit` | `10` | EZ Landing 최대 모터 출력 제한(스틱 중앙·스로틀 0일 때) |
+| `ez_landing_threshold` | `30` | 이 값 이하 스로틀에서 EZ Landing 제한이 걸리기 시작하는 임계값 |
+| `min_check` | `1050` | 스로틀 로우엔드 체크 값(이 값 미만 = 스로틀 로우로 판정) |
+| `alt_hold_climb_rate` | `70` | Alt Hold 상승 속도(cm/s 단위 스케일) |
+| `alt_hold_deadband` | `10` | Alt Hold 상승 쪽(HIGH) 데드밴드. 이 저장소가 추가한 `alt_hold_deadband_low`(하강 쪽)와 쌍을 이룸 |
+| `gps_rescue_descend_rate` | `135` | GPS Rescue 하강 속도 |
+| `gps_rescue_disarm_threshold` | `60` | GPS Rescue 착지 판정 후 디스암 임계값(가속도 저크) |
+| `gps_rescue_use_mag` | `ON` | GPS Rescue 시 자력계 헤딩 사용(자력계 없는 Pavo25 V2는 해당 없음 — 아래 주 참고) |
+| `pos_hold_without_mag` | `OFF` | Position Hold를 자력계 없이 쓰는 것을 허용할지 여부. OFF = 자력계 필수(자력계 없는 기체는 Position Hold 시 안전을 위해 비활성) |
+| `landing_disarm_threshold` | `0` | EZ Disarm(착지 충격 자동 디스암) **비활성화**. 0이면 `useEzDisarm`이 꺼져 이 저장소가 추가한 `landing_disarm_airmode_off_only`도 사실상 동작하지 않는다(값을 올려야 EZ Disarm이 켜짐) |
+
+```
+set gps_ublox_flight_model = AIRBORNE_1G
+set mixer_type = EZLANDING
+set ez_landing_limit = 10
+set ez_landing_threshold = 30
+set min_check = 1050
+set alt_hold_climb_rate = 70
+set gps_rescue_disarm_threshold = 60
+set gps_rescue_use_mag = ON
+set pos_hold_without_mag = OFF
+set landing_disarm_threshold = 0
+set gps_rescue_descend_rate = 135
+set alt_hold_deadband = 10
+save
+```
+
+- **자력계가 없는 Pavo25 V2**는 `gps_rescue_use_mag = ON`이어도 자력계 자체가 없어 실질적으로 무자력계 헤딩 추정으로 동작한다(`pos_hold_without_mag`가 Position Hold에 별도로 적용됨). 벤치에서 헤딩 추정 정확도를 먼저 확인한다.
+- `landing_disarm_threshold = 0`을 기본값으로 둘 경우 3절의 `landing_disarm_airmode_off_only`는 켜 두어도 실제 디스암 트리거 자체가 없어 영향이 없다. EZ Disarm을 쓰려면 `landing_disarm_threshold`를 0보다 크게(예: 50) 설정해야 한다.
+- `mixer_type = EZLANDING`은 6절 주의사항의 Alt Hold 하강 제동 상호작용과 함께 벤치에서 확인한다.
+
 ## 4. 플래시 후 알려진 오류 줄 (무시 가능)
 
 - VTX 관련: `osd_vtx_channel_pos`, `osd_sys_vtx_temp_pos` 등 (VTX 제어 기능 제거)
