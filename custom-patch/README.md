@@ -2,7 +2,9 @@
 
 기체별로 필요한 기능만 넣은 Betaflight 2025.12.5 커스텀 hex 모음과 사용 설명서. **보드별(`make <보드이름>`) 빌드로 플래시 용량을 줄이고, F722 기체에는 Alt Hold/Position Hold를 새로 추가한** 버전이다. (이전에 있던 통합 타겟(MCU 단위) hex `firmware/v3/`는 제거되었다 — 이 폴더가 유일한 배포본이다.)
 
-**v4(현재): 전 기체에서 서보(USE_SERVOS)와 배터리-컨티뉴(USE_BATTERY_CONTINUE)를 제거했고, OSD는 디지털(MSP DisplayPort 등)만 남기고 아날로그 OSD/MAX7456 드라이버를 제거했다.** 이 저장소의 모든 기체가 디지털 VTX만 쓰고 서보를 쓰지 않기 때문. 파일명 접미사가 `_v3_slim` → `_v4_slim`으로 바뀌었다.
+**v4: 전 기체에서 서보(USE_SERVOS)와 배터리-컨티뉴(USE_BATTERY_CONTINUE)를 제거했고, OSD는 디지털(MSP DisplayPort 등)만 남기고 아날로그 OSD/MAX7456 드라이버를 제거했다.** 이 저장소의 모든 기체가 디지털 VTX만 쓰고 서보를 쓰지 않기 때문.
+
+**v5(현재): Alt Hold 진입 스틱 래치(Entry Stick Latch)를 추가했다.** Alt Hold 진입 순간 스로틀 스틱 위치를 래치해, 스틱이 그 위치에서 5%(PWM 50) 이상 움직이기 전까지는 스틱 입력을 무시하고 고도를 그대로 유지한다. CLI 항목 없음(코드에 고정), PG 버전 변경 없음. 자세한 내용은 3-2절 참고. 파일명 접미사가 `_v3_slim` → `_v4_slim` → `_v5_slim`으로 바뀌었다.
 
 - 브랜치: `custom-patch/alt-hold-throttle-range`
 - 참고 이슈: betaflight/betaflight#15775
@@ -16,16 +18,16 @@
 
 | 기체 | 파일 |
 |---|---|
-| MARIO5 (CRSF, PINIO 유지) | `betaflight_2025.12.5_STM32F405_SPEEDYBEEF405V4_MARIO5_custom_v4_slim.hex` |
-| AOS_UL7_O4 (FPort, LED 스트립 제거) | `betaflight_2025.12.5_STM32F405_SPEEDYBEEF405V4_AOSUL7O4_custom_v4_slim.hex` |
-| Mark4_6in | `betaflight_2025.12.5_STM32F405_JHEF405PRO_MARK4_6IN_custom_v4_slim.hex` |
-| TJRC_10 | `betaflight_2025.12.5_STM32F7X2_MATEKF722SE_TJRC10_custom_v4_slim.hex` |
-| 8IN-KOPIS_X8 | `betaflight_2025.12.5_STM32F7X2_SPEEDYBEEF7V3_8INKOPISX8_custom_v4_slim.hex` |
-| CHIMERA7 | `betaflight_2025.12.5_STM32F7X2_FLYWOOF722PROV2_CHIMERA7_custom_v4_slim.hex` |
-| AOS_UL7_X8 | `betaflight_2025.12.5_STM32F7X2_MATEKF722HD_AOSUL7X8_custom_v4_slim.hex` |
-| Explorer LR4 | `betaflight_2025.12.5_STM32F7X2_JHEF7DUAL_EXPLORERLR4_custom_v4_slim.hex` |
-| Pavo25 V2 (CRSF, PINIO, **자력계 없음**, LED 없음) | `betaflight_2025.12.5_STM32F7X2_JHEF7DUAL_PAVO25V2_custom_v4_slim.hex` |
-| X8_5INCH | `betaflight_2025.12.5_STM32H743_MATEKH743_X8_5INCH_custom_v4_slim.hex` |
+| MARIO5 (CRSF, PINIO 유지) | `betaflight_2025.12.5_STM32F405_SPEEDYBEEF405V4_MARIO5_custom_v5_slim.hex` |
+| AOS_UL7_O4 (FPort, LED 스트립 제거) | `betaflight_2025.12.5_STM32F405_SPEEDYBEEF405V4_AOSUL7O4_custom_v5_slim.hex` |
+| Mark4_6in | `betaflight_2025.12.5_STM32F405_JHEF405PRO_MARK4_6IN_custom_v5_slim.hex` |
+| TJRC_10 | `betaflight_2025.12.5_STM32F7X2_MATEKF722SE_TJRC10_custom_v5_slim.hex` |
+| 8IN-KOPIS_X8 | `betaflight_2025.12.5_STM32F7X2_SPEEDYBEEF7V3_8INKOPISX8_custom_v5_slim.hex` |
+| CHIMERA7 | `betaflight_2025.12.5_STM32F7X2_FLYWOOF722PROV2_CHIMERA7_custom_v5_slim.hex` |
+| AOS_UL7_X8 | `betaflight_2025.12.5_STM32F7X2_MATEKF722HD_AOSUL7X8_custom_v5_slim.hex` |
+| Explorer LR4 | `betaflight_2025.12.5_STM32F7X2_JHEF7DUAL_EXPLORERLR4_custom_v5_slim.hex` |
+| Pavo25 V2 (CRSF, PINIO, **자력계 없음**, LED 없음) | `betaflight_2025.12.5_STM32F7X2_JHEF7DUAL_PAVO25V2_custom_v5_slim.hex` |
+| X8_5INCH | `betaflight_2025.12.5_STM32H743_MATEKH743_X8_5INCH_custom_v5_slim.hex` |
 
 보드가 다르면 잘못된 hex다. MARIO5와 AOS_UL7_O4는 같은 FC(SPEEDYBEEF405V4), Pavo25 V2와 Explorer LR4는 같은 FC(JHEF7DUAL)라서 파일명 라벨(MARIO5 / AOSUL7O4 / PAVO25V2 / EXPLORERLR4)까지 확인해야 한다. 파일명의 보드 이름이 기체 FC와 같은지 확인한 뒤 Betaflight Configurator의 **Load Firmware [Local]**로 올린다.
 
@@ -113,6 +115,19 @@ save
 - `landing_disarm_threshold = 0`을 기본값으로 둘 경우 3절의 `landing_disarm_airmode_off_only`는 켜 두어도 실제 디스암 트리거 자체가 없어 영향이 없다. EZ Disarm을 쓰려면 `landing_disarm_threshold`를 0보다 크게(예: 50) 설정해야 한다.
 - `mixer_type = EZLANDING`은 6절 주의사항의 Alt Hold 하강 제동 상호작용과 함께 벤치에서 확인한다.
 
+## 3-2. Alt Hold 진입 스틱 래치 (Entry Stick Latch, v5)
+
+CLI 파라미터가 아니라 코드에 고정된 동작이다(PG 버전 변경 없음). 원본: `jsungho/betaflight2026.6.x_custom` 브랜치 `custom-patch/alt-hold-throttle-range-2026.6.2` 커밋 `665f62a9e`를 이 저장소(2025.12.5) 코드 구조에 맞게 이식.
+
+- Alt Hold 진입(모드 켜는 순간)의 스로틀 스틱 위치를 저장한다.
+- 스틱이 그 위치에서 5%(PWM 50, 1000~2000 범위) 이상 움직이기 전까지는 스틱에 의한 고도 조절을 완전히 무시하고 진입 시점 고도를 그대로 유지한다. 이 구간에서는 `alt_hold_full_low_is_max_descend`도 적용되지 않는다.
+- 5%를 넘기면 그 순간부터 3절의 기존 커스텀 로직(`alt_hold_hover_throttle`, `alt_hold_deadband`, `alt_hold_deadband_low`, `alt_hold_full_low_is_max_descend`)이 호버 대비 스틱의 절대 위치 기준으로 적용된다.
+- 한 번 래치가 풀리면 Alt Hold를 껐다가 다시 켜기 전까지 재적용되지 않는다.
+- 페일세이프/GPS Rescue의 하강 오버라이드는 래치 상태와 무관하게 항상 최우선 적용된다.
+- Position Hold의 좌우/전후 스틱 로직은 이 패치의 영향을 받지 않는다.
+
+목적: Alt Hold 진입 순간 스틱이 정확히 호버 위치가 아니어도(조종자가 미세하게 어긋난 상태로 모드를 켜도) 의도치 않은 상승/하강이 시작되지 않도록 한다.
+
 ## 4. 플래시 후 알려진 오류 줄 (무시 가능)
 
 - VTX 관련: `osd_vtx_channel_pos`, `osd_sys_vtx_temp_pos` 등 (VTX 제어 기능 제거)
@@ -124,7 +139,7 @@ save
 ## 5. 빌드에서 제거한 기능과 유지한 기능
 
 - 제거: VTX 제어(common/control/table/SmartAudio/Tramp/MSP/RTC6705), 트랜스폰더, 레인지파인더·옵티컬플로우, OLED 대시보드, SimonK, GPS 랩타이머·Plus Codes, 런치 컨트롤, 안 쓰는 수신기·텔레메트리 프로토콜, PINIO(미사용 기체), LED 스트립(미사용 기체), **서보(전 기체), 배터리-컨티뉴(전 기체), 아날로그 OSD/MAX7456(전 기체)**
-- 유지: **자력계(Pavo25 V2 제외)**, GPS / GPS Rescue, **Alt Hold / Position Hold(전 기체)**, MSP DisplayPort OSD(디지털 전용, Walksnail 등), 블랙박스, ESC 센서, BLHeli 4way(Bluejay / AM32), 커스텀 CLI 파라미터 4종
+- 유지: **자력계(Pavo25 V2 제외)**, GPS / GPS Rescue, **Alt Hold / Position Hold(전 기체)**, **Alt Hold 진입 스틱 래치(전 기체, v5, 3-2절)**, MSP DisplayPort OSD(디지털 전용, Walksnail 등), 블랙박스, ESC 센서, BLHeli 4way(Bluejay / AM32), 커스텀 CLI 파라미터 4종
 - 시리얼 포트의 `131073`(MSP + VTX_MSP) 설정은 그대로 두어도 되지만 VTX_MSP는 빌드에 없어 VTX 제어만 빠진다. OSD 표시는 MSP DisplayPort(디지털)로 유지된다.
 - 자세한 기체별 표는 [BUILD_OPTIONS.md](BUILD_OPTIONS.md).
 

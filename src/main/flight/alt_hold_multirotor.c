@@ -41,6 +41,12 @@
 
 static const float taskIntervalSeconds = HZ_TO_INTERVAL(ALTHOLD_TASK_RATE_HZ); // i.e. 0.01 s
 
+// custom-patch: entry stick latch. On entering Alt Hold the throttle stick is not allowed to change the
+// altitude target until it has moved this far (in stick microseconds, 5% of the 1000..2000 travel) from where
+// it was on entry. Only then do alt_hold_deadband / alt_hold_deadband_low / alt_hold_hover_throttle /
+// alt_hold_full_low_is_max_descend apply. Fixed in code, no CLI setting.
+#define ALT_HOLD_ENTRY_LATCH_RELEASE_PWM   (0.05f * (PWM_RANGE_MAX - PWM_RANGE_MIN))
+
 typedef struct {
     bool isActive;
     float targetAltitudeCm;
@@ -51,6 +57,8 @@ typedef struct {
     bool allowStickAdjustment;
     bool fullLowIsMaxDescend; // custom-patch: see betaflight/betaflight#15775
     float hoverThrottle; // custom-patch: independent hover throttle for Alt Hold/Position Hold; see betaflight/betaflight#15775
+    bool entryLatched;   // custom-patch: throttle stick still within 5% of its position on entry
+    float entryThrottle; // custom-patch: rcCommand[THROTTLE] captured on entry
 } altHoldState_t;
 
 altHoldState_t altHold;
@@ -81,6 +89,9 @@ static void altHoldProcessTransitions(void) {
     if (FLIGHT_MODE(ALT_HOLD_MODE)) {
         if (!altHold.isActive) {
             altHoldReset();
+            // custom-patch: hold altitude until the pilot moves the throttle stick 5% from where it is now
+            altHold.entryThrottle = rcCommand[THROTTLE];
+            altHold.entryLatched = true;
             altHold.isActive = true;
         }
     } else {
@@ -107,7 +118,13 @@ static void altHoldUpdateTargetAltitude(void)
 
     float stickFactor = 0.0f;
 
-    if (altHold.allowStickAdjustment) {
+    // custom-patch: release the entry latch once the stick has moved 5% from its position on entry;
+    // until then the stick is ignored and the target altitude holds
+    if (altHold.entryLatched && fabsf(rcCommand[THROTTLE] - altHold.entryThrottle) >= ALT_HOLD_ENTRY_LATCH_RELEASE_PWM) {
+        altHold.entryLatched = false;
+    }
+
+    if (altHold.allowStickAdjustment && !altHold.entryLatched) {
         if (calculateThrottleStatus() != THROTTLE_LOW) {
             const float rcThrottle = rcCommand[THROTTLE];
             // custom-patch: low (descend) and high (climb) thresholds are now independently configurable
