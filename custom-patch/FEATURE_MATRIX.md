@@ -1,27 +1,29 @@
 # 기체별 업로드 기능 정리표 (2025.12.5 보드별 슬림 빌드)
 
-대상 hex: [`firmware/2025.12.5/`](firmware/2025.12.5/) (10개, 보드별 빌드) — 이 저장소의 유일한 배포 펌웨어다. 이전에 있던 통합 타겟(MCU 단위) hex(`firmware/v3/`)는 제거되었다.
+대상 hex: [`firmware/2025.12.5/`](firmware/2025.12.5/) (10개, 보드별 빌드, `_v4_slim`) — 이 저장소의 유일한 배포 펌웨어다. 이전에 있던 통합 타겟(MCU 단위) hex(`firmware/v3/`)는 제거되었다.
 
-| 기체 | 보드(FC) | MCU | 자력계 | PINIO | LED 스트립 | 수신기 | 텔레메트리 | Alt/Pos Hold | Flash |
-|---|---|---|---|---|---|---|---|---|---|
-| MARIO5 | SPEEDYBEEF405V4 | F405 | 포함 | 포함 | 제거 | CRSF | CRSF | 포함 | 40.5% |
-| AOS_UL7_O4 | SPEEDYBEEF405V4 | F405 | 포함 | 포함 | 제거 | FPort | SmartPort | 포함 | 40.2% |
-| Mark4_6in | JHEF405PRO | F405 | 포함 | 제거 | 제거 | SBUS | 없음 | 포함 | 40.8% |
-| TJRC_10 | MATEKF722SE | F722 | 포함 | 포함 | 포함 | CRSF | CRSF | 포함 | 81.1% |
-| 8IN-KOPIS_X8 | SPEEDYBEEF7V3 | F722 | 포함 | 포함 | 제거 | CRSF | CRSF | 포함 | 78.6% |
-| CHIMERA7 | FLYWOOF722PROV2 | F722 | 포함 | 포함 | 제거 | CRSF | CRSF | 포함 | 76.5% |
-| AOS_UL7_X8 | MATEKF722HD | F722 | 포함 | 제거 | 포함 | CRSF | CRSF | 포함 | 78.3% |
-| Explorer LR4 | JHEF7DUAL | F722 | 포함 | 제거 | 포함 | CRSF | CRSF | 포함 | 79.2% |
-| **Pavo25 V2** | JHEF7DUAL | F722 | **제거 (센서 없음)** | 포함 | 제거 | CRSF | CRSF | 포함 | 75.5% |
-| X8_5INCH | MATEKH743 | H743 | 포함 | 제거 | 포함 | FPort | SmartPort | 포함 | 25.0% |
+**v4: 서보(USE_SERVOS)·배터리-컨티뉴(USE_BATTERY_CONTINUE)·아날로그 OSD(USE_OSD_SD/MAX7456) 전 기체 공통 제거, OSD는 디지털(MSP DisplayPort 등)만 유지.**
+
+| 기체 | 보드(FC) | MCU | 자력계 | PINIO | LED 스트립 | 수신기 | 텔레메트리 | Alt/Pos Hold | 서보 | 배터리-컨티뉴 | OSD | Flash |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| MARIO5 | SPEEDYBEEF405V4 | F405 | 포함 | 포함 | 제거 | CRSF | CRSF | 포함 | 제거 | 제거 | 디지털만 | 39.34% |
+| AOS_UL7_O4 | SPEEDYBEEF405V4 | F405 | 포함 | 포함 | 제거 | FPort | SmartPort | 포함 | 제거 | 제거 | 디지털만 | 39.12% |
+| Mark4_6in | JHEF405PRO | F405 | 포함 | 제거 | 제거 | SBUS | 없음 | 포함 | 제거 | 제거 | 디지털만 | 39.65% |
+| TJRC_10 | MATEKF722SE | F722 | 포함 | 포함 | 포함 | CRSF | CRSF | 포함 | 제거 | 제거 | 디지털만 | 78.78% |
+| 8IN-KOPIS_X8 | SPEEDYBEEF7V3 | F722 | 포함 | 포함 | 제거 | CRSF | CRSF | 포함 | 제거 | 제거 | 디지털만 | 76.26% |
+| CHIMERA7 | FLYWOOF722PROV2 | F722 | 포함 | 포함 | 제거 | CRSF | CRSF | 포함 | 제거 | 제거 | 디지털만 | 74.32% |
+| AOS_UL7_X8 | MATEKF722HD | F722 | 포함 | 제거 | 포함 | CRSF | CRSF | 포함 | 제거 | 제거 | 디지털만 | 76.62% |
+| Explorer LR4 | JHEF7DUAL | F722 | 포함 | 제거 | 포함 | CRSF | CRSF | 포함 | 제거 | 제거 | 디지털만 | 76.68% |
+| **Pavo25 V2** | JHEF7DUAL | F722 | **제거 (센서 없음)** | 포함 | 제거 | CRSF | CRSF | 포함 | 제거 | 제거 | 디지털만 | 73.46% |
+| X8_5INCH | MATEKH743 | H743 | 포함 | 제거 | 포함 | FPort | SmartPort | 포함 | 제거 | 제거 | 디지털만 | 24.33% |
 
 > **참고**: F722 기체(TJRC_10 ~ Pavo25 V2)는 512KB 플래시라 `TARGET_FLASH_SIZE >= 1024` 조건을 만족하지 못해 Alt Hold/Position Hold가 기본적으로 빠진다. 이 표의 F722 기체용 "Alt/Pos Hold 포함"은 빌드에서 `-DUSE_ALTITUDE_HOLD -DUSE_GPS -DUSE_POSITION_HOLD`로 명시적으로 켠 것이다. 자세한 근거는 [BUILD_OPTIONS.md](BUILD_OPTIONS.md)의 "F722에서 추가 옵션이 필요한 이유" 참고.
 
 ## 공통 사항 (전 기체)
 
 - 커스텀 CLI 4종 전부 포함: `alt_hold_deadband_low`, `alt_hold_full_low_is_max_descend`, `alt_hold_hover_throttle`, `landing_disarm_airmode_off_only`
-- Alt Hold / Position Hold / GPS·GPS Rescue / MSP DisplayPort OSD / 블랙박스 / ESC 센서 / BLHeli 4way: 전 기체 포함
-- 제거(공통): VTX 제어, 트랜스폰더, 레인지파인더, SimonK, GPS 랩타이머·Plus Codes, 런치 컨트롤
+- Alt Hold / Position Hold / GPS·GPS Rescue / MSP DisplayPort OSD(디지털) / 블랙박스 / ESC 센서 / BLHeli 4way: 전 기체 포함
+- 제거(공통): VTX 제어, 트랜스폰더, 레인지파인더, SimonK, GPS 랩타이머·Plus Codes, 런치 컨트롤, **서보, 배터리-컨티뉴, 아날로그 OSD/MAX7456**(v4)
 
 ## 기체별 차이
 

@@ -13,13 +13,17 @@ cd "$(dirname "$0")/.."
 
 OUT="${OUT:-$PWD/custom-patch/firmware/2025.12.5}"
 VER="2025.12.5"
-SUFFIX="custom_v3_slim"
+SUFFIX="custom_v4_slim"
 
 # ---- 모든 기체 공통으로 뺄 기능 (CLI에서 사용하지 않음, VTX 는 사용자 지시) -------------------------------
 # -DCUSTOM_NO_xxx 는 src/main/target/common_post.h 끝의 custom-patch 블록이 처리한다.
 COMMON="-DCUSTOM_NO_VTX -DCUSTOM_NO_TRANSPONDER -DCUSTOM_NO_RANGEFINDER -DCUSTOM_NO_DASHBOARD"
 COMMON="$COMMON -DCUSTOM_NO_SIMONK -DCUSTOM_NO_GPS_EXTRAS -DCUSTOM_NO_LAUNCH_CONTROL"
 COMMON="$COMMON -DCUSTOM_NO_RX_OTHER -DCUSTOM_NO_TELEM_OTHER"
+# v4: 전 기체 서보(USE_SERVOS)/배터리-컨티뉴(USE_BATTERY_CONTINUE) 미사용 - 사용자 지시로 제거.
+# OSD는 디지털(MSP DisplayPort, Walksnail 등)만 쓰므로 -DUSE_OSD_HD 를 명시해 아날로그(USE_OSD_SD, MAX7456)를
+# common_pre.h 의 "둘 다 안 정해지면 둘 다 켠다" 분기에서 원천적으로 제외한다(USE_MAX7456도 함께 자동 제외됨).
+COMMON="$COMMON -DCUSTOM_NO_SERVOS -DCUSTOM_NO_BATTERY_CONTINUE -DUSE_OSD_HD"
 # 보드 config 로 빌드하면 USE_MAG 가 자동으로 정의되지 않는다(common_pre.h 의 !USE_CONFIG 블록에서만 정의).
 # 전 기체 CLI 에 mag_calibration / align_mag 설정이 있으므로 자력계를 명시적으로 켠다(드라이버는 자동 포함).
 # 자력계가 없는 기체(NO_MAG_LABELS)는 루프에서 -DUSE_MAG 를 붙이지 않는다.

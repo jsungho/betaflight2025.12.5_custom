@@ -792,3 +792,13 @@ extern struct linker_symbol __config_end;
 #undef USE_TELEMETRY_SMARTPORT
 #endif
 
+// custom-patch: strip servo mixer support (no aircraft in this fleet uses servos)
+#ifdef CUSTOM_NO_SERVOS
+#undef USE_SERVOS
+#endif
+
+// custom-patch: strip battery-continue (arm-through-brownout) support (unused)
+#ifdef CUSTOM_NO_BATTERY_CONTINUE
+#undef USE_BATTERY_CONTINUE
+#endif
+
