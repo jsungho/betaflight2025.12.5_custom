@@ -1041,12 +1041,18 @@ void processRxModes(timeUs_t currentTimeUs)
     }
 
 #ifdef USE_ALTITUDE_HOLD
+#ifndef USE_WING
+#define ALT_HOLD_SWITCH_REQUEST() altHoldRequestActive(IS_RC_MODE_ACTIVE(BOXALTHOLD))
+#else
+#define ALT_HOLD_SWITCH_REQUEST() IS_RC_MODE_ACTIVE(BOXALTHOLD)
+#endif
     // only if armed; can coexist with position hold
     if (ARMING_FLAG(ARMED)
         // and not in GPS_RESCUE_MODE, to give it priority over Altitude Hold
         && !FLIGHT_MODE(GPS_RESCUE_MODE)
         // and either the alt_hold switch is activated, or are in failsafe landing mode
-        && (IS_RC_MODE_ACTIVE(BOXALTHOLD) || failsafeIsActive())
+        // custom-patch: after the switch is turned off keep holding altitude until the stick reaches hover +/-5%
+        && (ALT_HOLD_SWITCH_REQUEST() || failsafeIsActive())
         // and we have Acc for self-levelling
         && sensors(SENSOR_ACC)
         // and we have altitude data
@@ -1058,6 +1064,9 @@ void processRxModes(timeUs_t currentTimeUs)
         }
     } else {
         DISABLE_FLIGHT_MODE(ALT_HOLD_MODE);
+#ifndef USE_WING
+        altHoldClearExitPending();
+#endif
     }
 #endif
 

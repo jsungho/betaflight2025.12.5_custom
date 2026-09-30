@@ -149,6 +149,7 @@
 #include "fc/rc_controls.h"
 #include "fc/runtime_config.h"
 
+#include "flight/alt_hold.h"
 #include "flight/gps_rescue.h"
 #include "flight/position.h"
 #include "flight/imu.h"
@@ -1103,6 +1104,12 @@ static void osdElementFlymode(osdElementParms_t *element)
         strcpy(element->buff, "HEAD");
     } else if (FLIGHT_MODE(PASSTHRU_MODE)) {
         strcpy(element->buff, "PASS");
+#if defined(USE_ALTITUDE_HOLD) && !defined(USE_WING)
+    } else if (isAltHoldExitPending()) {
+        // custom-patch: Alt Hold switch is off, altitude still held until the throttle stick reaches hover
+        strcpy(element->buff, "ALT WAIT");
+        element->attr = DISPLAYPORT_SEVERITY_WARNING;
+#endif
     } else if (FLIGHT_MODE(POS_HOLD_MODE)) {
         strcpy(element->buff, "POSH");
     } else if (FLIGHT_MODE(ALT_HOLD_MODE)) {

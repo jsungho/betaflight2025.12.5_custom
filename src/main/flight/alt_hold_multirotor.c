@@ -47,6 +47,10 @@ static const float taskIntervalSeconds = HZ_TO_INTERVAL(ALTHOLD_TASK_RATE_HZ); /
 // alt_hold_full_low_is_max_descend apply. Fixed in code, no CLI setting.
 #define ALT_HOLD_ENTRY_LATCH_RELEASE_PWM   (0.05f * (PWM_RANGE_MAX - PWM_RANGE_MIN))
 
+// custom-patch: exit hold. When the Alt Hold switch is turned off, altitude is still held until the throttle stick
+// comes within +/-5% of the hover throttle, so the hand-over to manual throttle does not change thrust.
+#define ALT_HOLD_EXIT_HOVER_BAND_PWM       (0.05f * (PWM_RANGE_MAX - PWM_RANGE_MIN))
+
 typedef struct {
     bool isActive;
     float targetAltitudeCm;
@@ -59,6 +63,8 @@ typedef struct {
     float hoverThrottle; // custom-patch: independent hover throttle for Alt Hold/Position Hold; see betaflight/betaflight#15775
     bool entryLatched;   // custom-patch: throttle stick still within 5% of its position on entry
     float entryThrottle; // custom-patch: rcCommand[THROTTLE] captured on entry
+    bool exitPending;    // custom-patch: switch is off, still holding altitude until stick reaches hover
+    bool prevSwitchOn;   // custom-patch: previous state of the Alt Hold switch request
 } altHoldState_t;
 
 altHoldState_t altHold;
@@ -73,6 +79,8 @@ static void altHoldReset(void)
 void altHoldInit(void)
 {
     altHold.isActive = false;
+    altHold.exitPending = false;
+    altHold.prevSwitchOn = false;
     altHold.deadband = altHoldConfig()->deadband / 100.0f;
     altHold.deadbandLow = altHoldConfig()->deadbandLow / 100.0f; // custom-patch: see betaflight/betaflight#15775
     altHold.allowStickAdjustment = altHoldConfig()->deadband;
@@ -124,7 +132,7 @@ static void altHoldUpdateTargetAltitude(void)
         altHold.entryLatched = false;
     }
 
-    if (altHold.allowStickAdjustment && !altHold.entryLatched) {
+    if (altHold.allowStickAdjustment && !altHold.entryLatched && !altHold.exitPending) {
         if (calculateThrottleStatus() != THROTTLE_LOW) {
             const float rcThrottle = rcCommand[THROTTLE];
             // custom-patch: low (descend) and high (climb) thresholds are now independently configurable
@@ -190,6 +198,51 @@ void updateAltHold(timeUs_t currentTimeUs) {
 
 bool isAltHoldActive(void) {
     return altHold.isActive;
+}
+
+bool isAltHoldExitPending(void)
+{
+    return altHold.exitPending;
+}
+
+void altHoldClearExitPending(void)
+{
+    altHold.exitPending = false;
+    altHold.prevSwitchOn = false;
+}
+
+// custom-patch: called every cycle from the flight mode update instead of IS_RC_MODE_ACTIVE(BOXALTHOLD)
+bool altHoldRequestActive(bool switchOn)
+{
+    const bool wasSwitchOn = altHold.prevSwitchOn;
+    altHold.prevSwitchOn = switchOn;
+
+    if (switchOn) {
+        if (altHold.exitPending) {
+            // switched back on while waiting: behave like a fresh entry, latch the stick where it is now
+            altHold.exitPending = false;
+            altHold.entryThrottle = rcCommand[THROTTLE];
+            altHold.entryLatched = true;
+        }
+        return true;
+    }
+
+    if (wasSwitchOn && altHold.isActive) {
+        // switch just turned off while Alt Hold was active: keep holding unless the stick is already at hover
+        altHold.exitPending = true;
+    }
+
+    if (altHold.exitPending) {
+        // custom-patch: reference is ap_hover_throttle (autopilotConfig()->hoverThrottle), not
+        // alt_hold_hover_throttle/thr_mid; if ap_hover_throttle is 0, fall back to Alt Hold's own effective
+        // hover value (altHold.hoverThrottle, computed in altHoldInit from alt_hold_hover_throttle/ap_hover_throttle)
+        const uint16_t apHover = autopilotConfig()->hoverThrottle;
+        const float hoverPwm = apHover != 0 ? (float)apHover : altHold.hoverThrottle;
+        if (fabsf(rcCommand[THROTTLE] - hoverPwm) <= ALT_HOLD_EXIT_HOVER_BAND_PWM) {
+            altHold.exitPending = false;   // stick at hover: release to manual throttle
+        }
+    }
+    return altHold.exitPending;
 }
 #endif
 

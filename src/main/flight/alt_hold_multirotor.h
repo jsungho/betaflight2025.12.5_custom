@@ -29,6 +29,11 @@
 void altHoldInit(void);
 void updateAltHold(timeUs_t currentTimeUs);
 bool isAltHoldActive(void);
+// custom-patch: exit hold. Returns true while the Alt Hold request (switch, or the exit hold after the switch
+// is turned off) is active; isAltHoldExitPending() is true while waiting for the stick to reach hover.
+bool altHoldRequestActive(bool switchOn);
+void altHoldClearExitPending(void);
+bool isAltHoldExitPending(void);
 
 #endif
 

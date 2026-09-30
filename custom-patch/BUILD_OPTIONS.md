@@ -4,7 +4,7 @@
 커스텀 패치(4종): `alt_hold_full_low_is_max_descend`, `alt_hold_deadband_low`, `alt_hold_hover_throttle`, `landing_disarm_airmode_off_only` (참고: betaflight/betaflight#15775)
 
 이 저장소의 펌웨어는 **보드별(`make <보드이름>`)** 로 빌드해서, 그 보드/기체가 실제로 쓰지 않는 기능을 빼 플래시 사용량을 줄였다(이전에 있던 통합 타겟(MCU 단위) hex는 제거되었다).
-결과 파일은 기체 이름이 들어간 hex(`..._custom_v5_slim.hex`)이며, **각 기체에 맞는 파일 하나만** 올려야 한다.
+결과 파일은 기체 이름이 들어간 hex(`..._custom_v6_slim.hex`)이며, **각 기체에 맞는 파일 하나만** 올려야 한다.
 
 **v4: 서보(USE_SERVOS)와 배터리-컨티뉴(USE_BATTERY_CONTINUE)를 전 기체에서 제거했고, OSD는 디지털(MSP DisplayPort 등, `USE_OSD_HD`)만 남기고 아날로그 OSD(`USE_OSD_SD`)와 MAX7456 드라이버(`USE_MAX7456`)를 제거했다.** 사용자 지시(2026-09): 이 저장소의 기체는 전부 디지털 VTX(Walksnail 등)만 쓰고 서보/아날로그 OSD를 쓰지 않음.
 
@@ -16,16 +16,16 @@
 
 | 기체 | 보드 (빌드 타깃) | MCU | 자력계 | PINIO | LED 스트립 | 수신기 프로토콜 | 텔레메트리 | F722 추가로 켠 옵션 | Flash |
 |---|---|---|---|---|---|---|---|---|---|
-| MARIO5 | SPEEDYBEEF405V4 | F405 | 포함 | 포함 (사용) | 제거 | **CRSF** | CRSF | 해당 없음 | 39.34% |
-| AOS_UL7_O4 | SPEEDYBEEF405V4 | F405 | 포함 | 포함 (사용) | 제거 | **FPort** | SmartPort (FPort 텔레메트리) | 해당 없음 | 39.14% |
-| Mark4_6in | JHEF405PRO | F405 | 포함 | **제거** | 제거 | **SBUS** | 없음 | 해당 없음 | 39.66% |
-| TJRC_10 | MATEKF722SE | F722 | 포함 | 포함 (사용) | 포함 | CRSF | CRSF | ALT / GPS / POS | 78.80% |
-| 8IN-KOPIS_X8 | SPEEDYBEEF7V3 | F722 | 포함 | 포함 (사용) | 제거 (1) | CRSF | CRSF | ALT / GPS / POS | 76.27% |
-| CHIMERA7 | FLYWOOF722PROV2 | F722 | 포함 | 포함 (사용) | 제거 | CRSF | CRSF | ALT / GPS / POS | 74.04% |
-| AOS_UL7_X8 | MATEKF722HD | F722 | 포함 | **제거** | 포함 | CRSF | CRSF | ALT / GPS / POS | 76.63% |
-| Explorer LR4 | JHEF7DUAL | F722 | 포함 | **제거** | 포함 | CRSF | CRSF | ALT / GPS / POS | 76.69% |
-| Pavo25 V2 | JHEF7DUAL | F722 | **제거** (센서 없음) | 포함 (사용) | 제거 (1) | **CRSF** | CRSF | ALT / GPS / POS | 73.47% |
-| X8_5INCH | MATEKH743 | H743 | 포함 | **제거** | 포함 | **FPort** | SmartPort (FPort 텔레메트리) | 해당 없음 | 24.33% |
+| MARIO5 | SPEEDYBEEF405V4 | F405 | 포함 | 포함 (사용) | 제거 | **CRSF** | CRSF | 해당 없음 | 39.37% |
+| AOS_UL7_O4 | SPEEDYBEEF405V4 | F405 | 포함 | 포함 (사용) | 제거 | **FPort** | SmartPort (FPort 텔레메트리) | 해당 없음 | 39.16% |
+| Mark4_6in | JHEF405PRO | F405 | 포함 | **제거** | 제거 | **SBUS** | 없음 | 해당 없음 | 39.69% |
+| TJRC_10 | MATEKF722SE | F722 | 포함 | 포함 (사용) | 포함 | CRSF | CRSF | ALT / GPS / POS | 78.90% |
+| 8IN-KOPIS_X8 | SPEEDYBEEF7V3 | F722 | 포함 | 포함 (사용) | 제거 (1) | CRSF | CRSF | ALT / GPS / POS | 76.37% |
+| CHIMERA7 | FLYWOOF722PROV2 | F722 | 포함 | 포함 (사용) | 제거 | CRSF | CRSF | ALT / GPS / POS | 74.08% |
+| AOS_UL7_X8 | MATEKF722HD | F722 | 포함 | **제거** | 포함 | CRSF | CRSF | ALT / GPS / POS | 76.67% |
+| Explorer LR4 | JHEF7DUAL | F722 | 포함 | **제거** | 포함 | CRSF | CRSF | ALT / GPS / POS | 76.73% |
+| Pavo25 V2 | JHEF7DUAL | F722 | **제거** (센서 없음) | 포함 (사용) | 제거 (1) | **CRSF** | CRSF | ALT / GPS / POS | 73.53% |
+| X8_5INCH | MATEKH743 | H743 | 포함 | **제거** | 포함 | **FPort** | SmartPort (FPort 텔레메트리) | 해당 없음 | 24.35% |
 
 - 자력계 = `USE_MAG` (드라이버 자동 포함). 보드 config 빌드는 이 옵션을 자동으로 켜지 않으므로 `build_custom.sh`가 Pavo25 V2를 제외한 모든 기체에 `-DUSE_MAG`를 명시한다.
 - ALT = `USE_ALTITUDE_HOLD`, GPS = `USE_GPS`, POS = `USE_POSITION_HOLD`
@@ -101,6 +101,85 @@ if (altHold.allowStickAdjustment && !altHold.entryLatched) {
 
 검증: 전 기체 재빌드(hex 10개, `_v5_slim` 접미사) 성공, 컴파일 경고/오류 없음, 플래시 오버플로 없음(24.33~78.80% 사용). 4개 커스텀 CLI 파라미터 및 자력계 관련 문자열이 hex 바이너리에 그대로 포함됨을 재확인. `#pragma message` 진단 삽입(임시, 검증 후 원복)으로 `ALT_HOLD_ENTRY_LATCH_RELEASE_PWM`이 전처리기 단계에서 실제로 정의됨을 확인.
 
+## v6: Alt Hold 해제 대기 (Exit Hold) + OSD "ALT WAIT" 표시
+
+**원본**: `jsungho/betaflight2026.6.x_custom` 브랜치 `custom-patch/alt-hold-throttle-range-2026.6.2` 커밋 `b83985b`("Alt Hold: keep holding after switch-off until throttle reaches hover +/-5%, OSD ALT WAIT")와 커밋 `e4593eb`("Alt Hold exit hold: use ap_hover_throttle as reference")를 2025.12.5 코드 구조에 맞게 이식. 진입 스틱 래치 커밋(`665f62a`)은 이번 이식 대상이 아니며 v5에서 이미 반영되어 있다.
+
+**배경**: 기존에는 Alt Hold 스위치를 끄는 순간 즉시 모드가 해제되어 스틱이 호버 위치와 다르면 스로틀이 갑자기 바뀔 수 있었다.
+
+**동작**:
+- Alt Hold 스위치를 끈 순간에 Alt Hold가 활성 상태였다면 즉시 해제하지 않고 `exitPending` 상태로 전환해 고도를 계속 유지한다. 대기 중에는 스틱에 의한 고도 조절을 완전히 무시한다(`altHoldUpdateTargetAltitude()`의 `stickFactor` 계산 분기에 `!altHold.exitPending` 조건 추가).
+- 대기 중 스로틀 스틱이 `ap_hover_throttle`(=`autopilotConfig()->hoverThrottle`) ±5%(PWM 50, 1000~2000 범위) 안에 들어오면 그 순간 Alt Hold를 완전히 해제한다. 기준은 `ap_hover_throttle`만 쓰며, `alt_hold_hover_throttle`이나 `thr_mid`는 기준이 아니다. `ap_hover_throttle`이 0이면 Alt Hold의 실효 호버 값(`altHold.hoverThrottle` — `alt_hold_hover_throttle`이 설정돼 있으면 그 값, 아니면 `ap_hover_throttle` 상속분과 동일한 값)으로 대체한다.
+- 스위치를 끈 순간 스틱이 이미 그 구간 안에 있으면 바로 해제된다(대기 없음).
+- 대기 중 스위치를 다시 켜면 대기를 취소하고 일반 Alt Hold로 복귀한다 — 이때 진입 스틱 래치(v5)가 새로 걸린다(현재 스틱 위치를 다시 `entryThrottle`로 저장).
+- 페일세이프/GPS Rescue 하강 오버라이드는 대기 상태와 무관하게 그대로 최우선 적용된다(기존 `failsafeIsActive()` 분기는 변경되지 않음).
+- `fc/core.c`의 Alt Hold 모드 판정에서 `IS_RC_MODE_ACTIVE(BOXALTHOLD)` 대신 `altHoldRequestActive(IS_RC_MODE_ACTIVE(BOXALTHOLD))`를 호출한다(매크로 `ALT_HOLD_SWITCH_REQUEST()`로 감싸 `USE_WING` 빌드에서는 기존 `IS_RC_MODE_ACTIVE(BOXALTHOLD)`를 그대로 씀). 모드가 꺼지는 `else` 분기(디스암, GPS Rescue 전환 등)에서는 `altHoldClearExitPending()`으로 대기를 지운다.
+- OSD 비행모드 요소(`osdElementFlymode`)에서 대기 중이면 `"ALT WAIT"`를 경고색(`DISPLAYPORT_SEVERITY_WARNING`)으로 표시한다. 우선순위는 `!FS!` → `RESC` → `HEAD` → `PASS` → **`ALT WAIT`** → `POSH` → `ALTH` 순서(FAILSAFE/RESCUE/HEADFREE/PASSTHRU 다음, POSH보다 앞).
+- 5%는 코드에 고정(`ALT_HOLD_EXIT_HOVER_BAND_PWM`)했다 — CLI 항목 없음, PG 버전 변경 없음. Position Hold는 변경하지 않았다.
+
+**이식 시 구조 차이**: 2026.6.2는 `autopilotGetEffectiveHoverThrottlePwm()`(2026.6.2 전용 함수)을 폴백으로 썼지만, 2025.12.5에는 이 함수가 없다. 대신 이 저장소가 v2에서 이미 계산해 쓰고 있는 `altHold.hoverThrottle`(`altHoldInit()`에서 `alt_hold_hover_throttle ? alt_hold_hover_throttle : ap_hover_throttle`로 결정됨)을 동일한 역할의 폴백으로 사용했다 — `ap_hover_throttle`이 0일 때만 쓰이므로 사용자가 지정한 "Alt Hold의 실효 호버 값" 요구사항과 일치한다. `fc/core.c`는 2026.6.2의 `processRxModes()`에 있는 `AUTOPILOT_MODE`/`flightPlanNavIsRescueDescentActive()` 조건이 2025.12.5에는 없어(해당 기능 자체가 없음) 그 부분은 제외하고 `IS_RC_MODE_ACTIVE(BOXALTHOLD)` → `ALT_HOLD_SWITCH_REQUEST()` 치환만 반영했다.
+
+```c
+// alt_hold_multirotor.c
+#define ALT_HOLD_EXIT_HOVER_BAND_PWM  (0.05f * (PWM_RANGE_MAX - PWM_RANGE_MIN))
+
+bool altHoldRequestActive(bool switchOn)
+{
+    const bool wasSwitchOn = altHold.prevSwitchOn;
+    altHold.prevSwitchOn = switchOn;
+    if (switchOn) {
+        if (altHold.exitPending) {
+            altHold.exitPending = false;
+            altHold.entryThrottle = rcCommand[THROTTLE];
+            altHold.entryLatched = true;
+        }
+        return true;
+    }
+    if (wasSwitchOn && altHold.isActive) {
+        altHold.exitPending = true;
+    }
+    if (altHold.exitPending) {
+        const uint16_t apHover = autopilotConfig()->hoverThrottle;
+        const float hoverPwm = apHover != 0 ? (float)apHover : altHold.hoverThrottle;
+        if (fabsf(rcCommand[THROTTLE] - hoverPwm) <= ALT_HOLD_EXIT_HOVER_BAND_PWM) {
+            altHold.exitPending = false;
+        }
+    }
+    return altHold.exitPending;
+}
+```
+
+```c
+// fc/core.c
+#ifndef USE_WING
+#define ALT_HOLD_SWITCH_REQUEST() altHoldRequestActive(IS_RC_MODE_ACTIVE(BOXALTHOLD))
+#else
+#define ALT_HOLD_SWITCH_REQUEST() IS_RC_MODE_ACTIVE(BOXALTHOLD)
+#endif
+    if (ARMING_FLAG(ARMED) && !FLIGHT_MODE(GPS_RESCUE_MODE)
+        && (ALT_HOLD_SWITCH_REQUEST() || failsafeIsActive())
+        && sensors(SENSOR_ACC) && isAltitudeAvailable() && wasThrottleRaised()) {
+        ENABLE_FLIGHT_MODE(ALT_HOLD_MODE);
+    } else {
+        DISABLE_FLIGHT_MODE(ALT_HOLD_MODE);
+#ifndef USE_WING
+        altHoldClearExitPending();
+#endif
+    }
+```
+
+```c
+// osd/osd_elements.c (osdElementFlymode)
+#if defined(USE_ALTITUDE_HOLD) && !defined(USE_WING)
+    } else if (isAltHoldExitPending()) {
+        strcpy(element->buff, "ALT WAIT");
+        element->attr = DISPLAYPORT_SEVERITY_WARNING;
+#endif
+    } else if (FLIGHT_MODE(POS_HOLD_MODE)) {
+```
+
+검증: 전 기체 재빌드(hex 10개, `_v6_slim` 접미사) 성공, 컴파일 경고/오류 없음, 플래시 오버플로 없음(24.35~78.90% 사용). 4개 커스텀 CLI 파라미터, 자력계, `"ALT WAIT"` 문자열이 hex 바이너리에 그대로 포함됨을 확인. `#pragma message` 진단(임시, 검증 후 원복)으로 `ALT_HOLD_EXIT_HOVER_BAND_PWM`이 전처리기 단계에서 실제로 정의됨을 확인.
+
 ## 빌드 방법
 
 ```bash
@@ -114,16 +193,18 @@ custom-patch/build_custom.sh
 custom-patch/build_custom.sh MATEKF722SE JHEF7DUAL
 ```
 
-결과는 `custom-patch/firmware/2025.12.5/`에 `betaflight_2025.12.5_<MCU>_<보드>_<기체>_custom_v5_slim.hex` 형식으로 생성된다.
+결과는 `custom-patch/firmware/2025.12.5/`에 `betaflight_2025.12.5_<MCU>_<보드>_<기체>_custom_v6_slim.hex` 형식으로 생성된다.
 
 ## 검증한 내용
 
-- 전 기체 빌드/링크 성공 (플래시 오버플로 없음, v5 기준 24.33~78.80% 사용)
+- 전 기체 빌드/링크 성공 (플래시 오버플로 없음, v6 기준 24.35~78.90% 사용)
 - 서보/배터리-컨티뉴/아날로그 OSD(MAX7456) 제거 후에도 4개 커스텀 CLI 파라미터, Alt Hold/Position Hold, 자력계(Pavo25 V2 제외)가 hex 문자열 검색으로 전부 유지됨을 확인
 - 4개 커스텀 CLI 파라미터(`alt_hold_deadband_low`, `alt_hold_full_low_is_max_descend`, `alt_hold_hover_throttle`, `landing_disarm_airmode_off_only`) 문자열이 전 기체 바이너리에 포함됨을 확인
 - `altHoldInit`, `updatePosHold` 심볼로 Alt Hold / Position Hold가 전 기체(F405/F722/H743)에 실제로 링크됨을 확인
 - 자력계 심볼(`compassConfig` 등) 존재 여부로 Pavo25 V2만 자력계가 빠졌고 나머지는 포함됨을 확인 (Explorer LR4: 5개 심볼 존재 vs Pavo25 V2 재현 빌드: 0개)
-- Alt Hold 진입 스틱 래치(v5): `#pragma message` 진단으로 `ALT_HOLD_ENTRY_LATCH_RELEASE_PWM`이 전처리기 단계에서 정의됨을 확인. 실비행 동작(래치 해제 타이밍 등)은 벤치·비행 시험으로 별도 검증 필요
+- Alt Hold 진입 스틱 래치(v5): `#pragma message` 진단으로 `ALT_HOLD_ENTRY_LATCH_RELEASE_PWM`이 전처리기 단계에서 정의됨을 확인.
+- Alt Hold 해제 대기 + OSD "ALT WAIT"(v6): `"ALT WAIT"` 문자열이 전 기체 hex에 포함됨을 확인, `#pragma message` 진단으로 `ALT_HOLD_EXIT_HOVER_BAND_PWM`이 전처리기 단계에서 정의됨을 확인.
+- 실비행 동작(래치 해제 타이밍, 해제 대기 해제 타이밍, OSD 표시 등)은 벤치·비행 시험으로 별도 검증 필요
 
 ## 사용상 주의
 
