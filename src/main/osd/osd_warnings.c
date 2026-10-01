@@ -45,6 +45,7 @@
 #include "fc/rc_modes.h"
 #include "fc/runtime_config.h"
 
+#include "flight/alt_hold.h"
 #include "flight/failsafe.h"
 #include "flight/gps_rescue.h"
 #include "flight/imu.h"
@@ -427,6 +428,16 @@ void renderOsdWarning(char *warningText, bool *blinking, uint8_t *displayAttr)
         *displayAttr = DISPLAYPORT_SEVERITY_WARNING;
         return;
     }
+
+#if defined(USE_ALTITUDE_HOLD) && !defined(USE_WING)
+    // custom-patch: Alt Hold with Airmode OFF = landing assist; clears when Airmode turns ON, on disarm,
+    // or once altitude climbs back above 5.5 m (hysteresis handled inside isAltHoldLandingMode())
+    if (isAltHoldLandingMode()) {
+        tfp_sprintf(warningText, "ALTHOLD : LANDING");
+        *displayAttr = DISPLAYPORT_SEVERITY_INFO;
+        return;
+    }
+#endif
 
     // Visual beeper
     if (osdWarnGetState(OSD_WARNING_VISUAL_BEEPER) && osdGetVisualBeeperState()) {

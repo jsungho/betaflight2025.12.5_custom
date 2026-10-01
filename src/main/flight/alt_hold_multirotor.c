@@ -28,6 +28,7 @@
 #include "config/config.h"
 
 #include "fc/rc.h"
+#include "fc/rc_modes.h"
 #include "fc/runtime_config.h"
 
 #include "flight/autopilot.h"
@@ -36,6 +37,9 @@
 
 #include "rx/rx.h"
 #include "pg/autopilot.h"
+#ifdef USE_GPS_RESCUE
+#include "pg/gps_rescue.h"
+#endif
 
 #include "alt_hold.h"
 
@@ -70,6 +74,56 @@ typedef struct {
 
 altHoldState_t altHold;
 
+// custom-patch: landing assist. In Alt Hold with Airmode OFF the pilot is assumed to be landing, so the
+// vertical rate cap (alt_hold_climb_rate) is replaced by gps_rescue_descend_rate based values near the ground:
+//   altitude <= 5 m : 2 x gps_rescue_descend_rate
+//   altitude <= 2 m : 1 x gps_rescue_descend_rate
+// otherwise alt_hold_climb_rate is used unchanged. Also drives the "ALTHOLD : LANDING" OSD message.
+// Each threshold pair is a hysteresis latch (turns on at the lower value, off only above the higher value)
+// to avoid rapid toggling near the boundary; see betaflight/betaflight#15775
+#define ALT_HOLD_LANDING_ALT_HIGH_CM    500.0f  // 5.0 m: landing assist (x2) turns on at or below this altitude
+#define ALT_HOLD_LANDING_ALT_OFF_CM     550.0f  // 5.5 m: ... and turns off only above this altitude
+#define ALT_HOLD_LANDING_ALT_LOW_ON_CM  180.0f  // 1.8 m: x1 descend rate turns on at or below this altitude
+#define ALT_HOLD_LANDING_ALT_LOW_OFF_CM 220.0f  // 2.2 m: ... and turns off (back to x2) only above this altitude
+
+static bool altHoldLandingLatched;     // 5.0 m on / 5.5 m off
+static bool altHoldLandingNearLatched; // 1.8 m on / 2.2 m off
+
+// custom-patch: Alt Hold + Airmode OFF + armed = landing assist; also used directly by the OSD warning.
+// Updates the 5 m latch as a side effect each time it is called; see betaflight/betaflight#15775
+bool isAltHoldLandingMode(void)
+{
+    if (!(ARMING_FLAG(ARMED) && FLIGHT_MODE(ALT_HOLD_MODE) && !isAirmodeEnabled())) {
+        altHoldLandingLatched = false;
+        altHoldLandingNearLatched = false;
+        return false;
+    }
+    const float altitudeCm = getAltitudeCm();
+    altHoldLandingLatched = altHoldLandingLatched ? (altitudeCm <= ALT_HOLD_LANDING_ALT_OFF_CM)
+                                                   : (altitudeCm <= ALT_HOLD_LANDING_ALT_HIGH_CM);
+    return altHoldLandingLatched;
+}
+
+// custom-patch: Alt Hold's vertical rate cap; replaced by gps_rescue_descend_rate based landing assist
+// near the ground (failsafe auto-landing and GPS Rescue keep their own, separate rate handling).
+static float altHoldMaxClimbRate(void)
+{
+#ifdef USE_GPS_RESCUE
+    if (isAltHoldLandingMode() && !failsafeIsActive()) {
+        const float descendRateCmS = (float)gpsRescueConfig()->descendRate;
+        const float altitudeCm = getAltitudeCm();
+        altHoldLandingNearLatched = altHoldLandingNearLatched ? (altitudeCm <= ALT_HOLD_LANDING_ALT_LOW_OFF_CM)
+                                                               : (altitudeCm <= ALT_HOLD_LANDING_ALT_LOW_ON_CM);
+        if (altHoldLandingNearLatched) {
+            return descendRateCmS;
+        }
+        // isAltHoldLandingMode() above already applied the 5.0 m on / 5.5 m off hysteresis
+        return descendRateCmS * 2.0f;
+    }
+#endif
+    return altHold.maxVelocity;
+}
+
 static void altHoldReset(void)
 {
     resetAltitudeControl();
@@ -80,6 +134,8 @@ static void altHoldReset(void)
 void altHoldInit(void)
 {
     altHold.isActive = false;
+    altHoldLandingLatched = false;
+    altHoldLandingNearLatched = false;
     altHold.exitPending = false;
     altHold.prevSwitchOn = false;
     altHold.deadband = altHoldConfig()->deadband / 100.0f;
@@ -105,6 +161,8 @@ static void altHoldProcessTransitions(void) {
         }
     } else {
         altHold.isActive = false;
+        altHoldLandingLatched = false;
+        altHoldLandingNearLatched = false;
     }
 
     // ** the transition out of alt hold (exiting altHold) may be rough.  Some notes... **
@@ -164,14 +222,16 @@ static void altHoldUpdateTargetAltitude(void)
         // constant (set) deceleration target in the last 2m
         stickFactor = -(0.9f + constrainf(getAltitudeCm() / 2000.0f, 0.1f, 9.0f));
     }
-    altHold.targetVelocity = stickFactor * altHold.maxVelocity;
+    // custom-patch: landing assist replaces the climb-rate cap near the ground when Alt Hold + Airmode OFF
+    const float maxVelocity = altHoldMaxClimbRate();
+    altHold.targetVelocity = stickFactor * maxVelocity;
 
     // prevent stick input from moving target altitude too far away from current altitude
     // otherwise it can be difficult to bring target altitude close to current altitude in a reasonable time
     // using maxVelocity means the stick can bring altitude target to current within 1s
     // this constrains the P and I response to user target changes, but not D of F responses
     // Range is compared to distance that might be traveled in one second
-    if (fabsf(getAltitudeCm() - altHold.targetAltitudeCm) < altHold.maxVelocity * 1.0f /* s */) {
+    if (fabsf(getAltitudeCm() - altHold.targetAltitudeCm) < maxVelocity * 1.0f /* s */) {
         altHold.targetAltitudeCm += altHold.targetVelocity * taskIntervalSeconds;
     }
 }

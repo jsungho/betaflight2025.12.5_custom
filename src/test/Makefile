@@ -46,6 +46,7 @@ althold_unittest_SRC := \
 
 althold_unittest_DEFINES := \
 		USE_ALTITUDE_HOLD= \
+		USE_GPS_RESCUE= \
 
 arming_prevention_unittest_SRC := \
 		$(USER_DIR)/common/bitarray.c \

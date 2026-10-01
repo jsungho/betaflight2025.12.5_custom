@@ -29,6 +29,8 @@
 void altHoldInit(void);
 void updateAltHold(timeUs_t currentTimeUs);
 bool isAltHoldActive(void);
+// custom-patch: Alt Hold + Airmode OFF + armed (landing assist); also drives the "ALTHOLD : LANDING" OSD message
+bool isAltHoldLandingMode(void);
 // custom-patch: exit hold. Returns true while the Alt Hold request (switch, or the exit hold after the switch
 // is turned off) is active; isAltHoldExitPending() is true while waiting for the stick to reach hover.
 bool altHoldRequestActive(bool switchOn);

@@ -8,7 +8,9 @@
 
 **v6: Alt Hold 해제 대기(Exit Hold)와 OSD "ALT WAIT" 표시를 추가했다.** Alt Hold 스위치를 끈 순간에도 즉시 해제하지 않고, 스로틀 스틱이 `ap_hover_throttle` ±5%(PWM 50) 안에 들어올 때까지 고도를 계속 유지한다. 대기 중에는 OSD 비행모드 표시에 "ALT WAIT"(경고색)가 뜬다. CLI 항목 없음(코드에 고정), PG 버전 변경 없음. 자세한 내용은 3-3절 참고.
 
-**v7(현재): 해제 대기의 "호버 구간 건너뜀" 결함을 수정했다.** 스틱을 빠르게 움직이면 매 사이클(10ms) 사이에 `ap_hover_throttle` ±5% 구간을 통째로 건너뛰어 해제가 안 되는 경우가 있었다 — 직전 사이클의 스틱 값을 같이 저장해, 이번 사이클과 직전 사이클 사이에 호버값을 가로질렀으면(구간 안에 들어오지 않고 지나쳤어도) 그 자리에서 해제하도록 고쳤다. 위/아래 양방향 모두 적용. CLI 항목 없음, PG 버전 변경 없음. 자세한 내용은 3-3절 참고. 호스트(PC)에서 돌리는 시뮬레이션 유닛테스트(`src/test/unit/althold_unittest.cc`)로 진입 래치/해제 대기/호버 가로지름/스위치 재투입/디스암 시나리오를 검증했다. 파일명 접미사가 `_v3_slim` → `_v4_slim` → `_v5_slim` → `_v6_slim` → `_v7_slim`으로 바뀌었다.
+**v7: 해제 대기의 "호버 구간 건너뜀" 결함을 수정했다.** 스틱을 빠르게 움직이면 매 사이클(10ms) 사이에 `ap_hover_throttle` ±5% 구간을 통째로 건너뛰어 해제가 안 되는 경우가 있었다 — 직전 사이클의 스틱 값을 같이 저장해, 이번 사이클과 직전 사이클 사이에 호버값을 가로질렀으면(구간 안에 들어오지 않고 지나쳤어도) 그 자리에서 해제하도록 고쳤다. 위/아래 양방향 모두 적용. CLI 항목 없음, PG 버전 변경 없음. 자세한 내용은 3-3절 참고. 호스트(PC)에서 돌리는 시뮬레이션 유닛테스트(`src/test/unit/althold_unittest.cc`)로 진입 래치/해제 대기/호버 가로지름/스위치 재투입/디스암 시나리오를 검증했다(v7 당시 13개 테스트, `_v7_slim`).
+
+**v8(현재): Alt Hold 착륙 보조(Landing Assist)를 추가했다.** Alt Hold 중 Airmode가 꺼져 있으면(=착륙 중으로 간주) 고도에 따라 수직 속도 상한을 `gps_rescue_descend_rate` 기반 값으로 낮춰, 착지 직전 과도한 상승/하강을 막는다. 히스테리시스(5.0m/5.5m, 1.8m/2.2m)로 경계에서 떨림이 없게 했고, OSD에 "ALTHOLD : LANDING"을 표시한다. CLI 항목 없음, PG 버전 변경 없음. 자세한 내용은 3-4절 참고. 호스트(PC) 시뮬레이션 유닛테스트에 `AltholdLandingAssist` 10개를 추가해 총 23개 테스트로 검증했다. 파일명 접미사가 `_v3_slim` → `_v4_slim` → `_v5_slim` → `_v6_slim` → `_v7_slim` → `_v8_slim`으로 바뀌었다.
 
 - 브랜치: `custom-patch/alt-hold-throttle-range`
 - 참고 이슈: betaflight/betaflight#15775
@@ -22,16 +24,16 @@
 
 | 기체 | 파일 |
 |---|---|
-| MARIO5 (CRSF, PINIO 유지) | `betaflight_2025.12.5_STM32F405_SPEEDYBEEF405V4_MARIO5_custom_v7_slim.hex` |
-| AOS_UL7_O4 (FPort, LED 스트립 제거) | `betaflight_2025.12.5_STM32F405_SPEEDYBEEF405V4_AOSUL7O4_custom_v7_slim.hex` |
-| Mark4_6in | `betaflight_2025.12.5_STM32F405_JHEF405PRO_MARK4_6IN_custom_v7_slim.hex` |
-| TJRC_10 | `betaflight_2025.12.5_STM32F7X2_MATEKF722SE_TJRC10_custom_v7_slim.hex` |
-| 8IN-KOPIS_X8 | `betaflight_2025.12.5_STM32F7X2_SPEEDYBEEF7V3_8INKOPISX8_custom_v7_slim.hex` |
-| CHIMERA7 | `betaflight_2025.12.5_STM32F7X2_FLYWOOF722PROV2_CHIMERA7_custom_v7_slim.hex` |
-| AOS_UL7_X8 | `betaflight_2025.12.5_STM32F7X2_MATEKF722HD_AOSUL7X8_custom_v7_slim.hex` |
-| Explorer LR4 | `betaflight_2025.12.5_STM32F7X2_JHEF7DUAL_EXPLORERLR4_custom_v7_slim.hex` |
-| Pavo25 V2 (CRSF, PINIO, **자력계 없음**, LED 없음) | `betaflight_2025.12.5_STM32F7X2_JHEF7DUAL_PAVO25V2_custom_v7_slim.hex` |
-| X8_5INCH | `betaflight_2025.12.5_STM32H743_MATEKH743_X8_5INCH_custom_v7_slim.hex` |
+| MARIO5 (CRSF, PINIO 유지) | `betaflight_2025.12.5_STM32F405_SPEEDYBEEF405V4_MARIO5_custom_v8_slim.hex` |
+| AOS_UL7_O4 (FPort, LED 스트립 제거) | `betaflight_2025.12.5_STM32F405_SPEEDYBEEF405V4_AOSUL7O4_custom_v8_slim.hex` |
+| Mark4_6in | `betaflight_2025.12.5_STM32F405_JHEF405PRO_MARK4_6IN_custom_v8_slim.hex` |
+| TJRC_10 | `betaflight_2025.12.5_STM32F7X2_MATEKF722SE_TJRC10_custom_v8_slim.hex` |
+| 8IN-KOPIS_X8 | `betaflight_2025.12.5_STM32F7X2_SPEEDYBEEF7V3_8INKOPISX8_custom_v8_slim.hex` |
+| CHIMERA7 | `betaflight_2025.12.5_STM32F7X2_FLYWOOF722PROV2_CHIMERA7_custom_v8_slim.hex` |
+| AOS_UL7_X8 | `betaflight_2025.12.5_STM32F7X2_MATEKF722HD_AOSUL7X8_custom_v8_slim.hex` |
+| Explorer LR4 | `betaflight_2025.12.5_STM32F7X2_JHEF7DUAL_EXPLORERLR4_custom_v8_slim.hex` |
+| Pavo25 V2 (CRSF, PINIO, **자력계 없음**, LED 없음) | `betaflight_2025.12.5_STM32F7X2_JHEF7DUAL_PAVO25V2_custom_v8_slim.hex` |
+| X8_5INCH | `betaflight_2025.12.5_STM32H743_MATEKH743_X8_5INCH_custom_v8_slim.hex` |
 
 보드가 다르면 잘못된 hex다. MARIO5와 AOS_UL7_O4는 같은 FC(SPEEDYBEEF405V4), Pavo25 V2와 Explorer LR4는 같은 FC(JHEF7DUAL)라서 파일명 라벨(MARIO5 / AOSUL7O4 / PAVO25V2 / EXPLORERLR4)까지 확인해야 한다. 파일명의 보드 이름이 기체 FC와 같은지 확인한 뒤 Betaflight Configurator의 **Load Firmware [Local]**로 올린다.
 
@@ -150,6 +152,47 @@ CLI 파라미터가 아니라 코드에 고정된 동작이다(PG 버전 변경 
 
 검증: 호스트(PC)에서 돌리는 구글테스트 기반 시뮬레이션(`src/test/unit/althold_unittest.cc`, `AltholdCustomSim` 스위트)으로 진입 래치, 해제 대기 유지/해제, `ap_hover_throttle` 기준(다른 파라미터 아님) 확인, 즉시 해제, 위/아래 양방향 빠른 스틱 이동으로 구간을 건너뛰는 경우, 대기 중 스위치 재투입, 디스암 시 대기 삭제, 진입한 적 없는 상태에서 스위치를 끄면 대기가 시작되지 않는 경우까지 13개 테스트로 확인(실행: `cd src/test && make test_althold_unittest`).
 
+## 3-4. Alt Hold 착륙 보조 (Landing Assist, v8)
+
+CLI 파라미터가 아니라 코드에 고정된 동작이다(PG 버전 변경 없음). 원본: `jsungho/betaflight2026.6.x_custom` 브랜치 `custom-patch/alt-hold-throttle-range-2026.6.2` 커밋 `90d5d9c`(최초), `f29a459`(OSD 고도 조건), `0f78e2e`(5.0m/5.5m 히스테리시스), `e2c4e83`(1.8m/2.2m 히스테리시스)를 이 저장소(2025.12.5) 코드 구조에 맞게 이식. 2026.6.2의 `getAltitudeCmControl()`/`altHold.maxClimbRate`는 2025.12.5에 없어 각각 `getAltitudeCm()`/`altHold.maxVelocity`로 대체했다.
+
+**동작 조건** (모두 만족해야 "착륙 보조" 적용):
+
+| 조건 | 값 |
+|---|---|
+| 비행 모드 | Alt Hold(`ALT_HOLD_MODE`) |
+| Airmode | OFF (`isAirmodeEnabled() == false`) |
+| 시동 | ARMED |
+
+- 위 세 조건을 하나라도 벗어나면 아래 히스테리시스 래치가 즉시 모두 풀린다. `altHoldInit()`과 Alt Hold 종료 전환 시에도 풀린다.
+- 페일세이프 자동 착륙(`failsafeIsActive()`)과 GPS Rescue 자체의 속도 처리는 기존 로직 그대로이며 착륙 보조가 끼어들지 않는다.
+- `USE_GPS_RESCUE`가 없는 빌드에서는 착륙 보조 속도 변경 코드 자체가 컴파일되지 않는다(이 저장소의 10개 기체는 전부 GPS/GPS Rescue를 포함하므로 전 기체 적용).
+
+**수직 속도 상한** — Alt Hold의 기존 상한(`alt_hold_climb_rate × 10` cm/s)을 아래처럼 교체한다(상승에도 동일 적용, 스틱 비율은 그대로):
+
+| 고도(제어용, `getAltitudeCm()`) | 속도 상한 |
+|---|---|
+| 5m 초과 (또는 Airmode ON / Alt Hold 아님) | `alt_hold_climb_rate` 그대로 |
+| 5m 이하 | `gps_rescue_descend_rate × 2` |
+| 2m 이하 | `gps_rescue_descend_rate × 1` |
+
+**히스테리시스** (경계에서 상태가 떨리지 않도록 ON/OFF 임계값을 다르게 둠):
+
+| 구간 | 켜짐(ON) | 꺼짐(OFF) |
+|---|---|---|
+| 5m 구간 (×2, OSD 문구 공통) | 고도 ≤ 5.0m (500cm) | 고도 > 5.5m (550cm) |
+| 2m 구간 (×1) | 고도 ≤ 1.8m (180cm) | 고도 > 2.2m (220cm) |
+
+2m 구간이 켜져 있으면 5m 구간 안에서도 ×1이 우선한다. 구현상 `isAltHoldLandingMode()` 호출마다 5m 래치가 갱신되고, 속도 상한 계산 함수가 이 함수를 호출한 뒤 2m 래치를 갱신한다.
+
+**OSD 표시**: `isAltHoldLandingMode()`가 true면 경고창에 `"ALTHOLD : LANDING"`(색상: INFO, 깜박임 없음)을 표시한다. 배터리·RSSI·페일세이프 경고보다 우선순위가 낮고 비주얼 비퍼(`* * * *`) 바로 앞에 뜬다. Airmode가 켜지거나, 디스암되거나, 고도가 5.5m를 넘으면 문구가 사라진다. 새 OSD 경고 비트/CLI 항목을 추가하지 않았다.
+
+기존 커스텀 CLI 값(`alt_hold_deadband_low`, `alt_hold_full_low_is_max_descend`, `alt_hold_hover_throttle`, `landing_disarm_airmode_off_only`)과 진입 스틱 래치(3-2절)/해제 대기(3-3절)는 원래 로직대로 동작하며, 착륙 보조는 수직 속도 상한 계산 함수만 바꾼다.
+
+목적: 조종자가 Airmode를 끄고 착륙 조작을 하는(이 저장소 3-1절의 운용 전제) 상황에서, 지면 근처의 과도한 상승/하강 속도를 GPS Rescue의 하강 속도 설정을 재사용해 자동으로 제한한다.
+
+검증: 호스트(PC) 시뮬레이션에 `AltholdLandingAssist` 10개 테스트를 추가(총 23개). 5m 초과 시 `alt_hold_climb_rate` 그대로, 5m/2m 이하 구간별 배율, Airmode ON 시 미적용, 스틱 부분 입력 비율 유지, 상승 속도도 동일 상한 적용, 5.0m/5.5m 및 1.8m/2.2m 히스테리시스(경계 사이에서 상태 유지), `isAltHoldLandingMode()`가 Airmode/시동 상태를 따르는지까지 확인(실행: `cd src/test && make test_althold_unittest`).
+
 ## 4. 플래시 후 알려진 오류 줄 (무시 가능)
 
 - VTX 관련: `osd_vtx_channel_pos`, `osd_sys_vtx_temp_pos` 등 (VTX 제어 기능 제거)
@@ -161,14 +204,15 @@ CLI 파라미터가 아니라 코드에 고정된 동작이다(PG 버전 변경 
 ## 5. 빌드에서 제거한 기능과 유지한 기능
 
 - 제거: VTX 제어(common/control/table/SmartAudio/Tramp/MSP/RTC6705), 트랜스폰더, 레인지파인더·옵티컬플로우, OLED 대시보드, SimonK, GPS 랩타이머·Plus Codes, 런치 컨트롤, 안 쓰는 수신기·텔레메트리 프로토콜, PINIO(미사용 기체), LED 스트립(미사용 기체), **서보(전 기체), 배터리-컨티뉴(전 기체), 아날로그 OSD/MAX7456(전 기체)**
-- 유지: **자력계(Pavo25 V2 제외)**, GPS / GPS Rescue, **Alt Hold / Position Hold(전 기체)**, **Alt Hold 진입 스틱 래치(전 기체, v5, 3-2절)**, **Alt Hold 해제 대기 + OSD "ALT WAIT"(전 기체, v6, 3-3절)**, MSP DisplayPort OSD(디지털 전용, Walksnail 등), 블랙박스, ESC 센서, BLHeli 4way(Bluejay / AM32), 커스텀 CLI 파라미터 4종
+- 유지: **자력계(Pavo25 V2 제외)**, GPS / GPS Rescue, **Alt Hold / Position Hold(전 기체)**, **Alt Hold 진입 스틱 래치(전 기체, v5, 3-2절)**, **Alt Hold 해제 대기 + OSD "ALT WAIT"(전 기체, v6, 3-3절)**, **Alt Hold 착륙 보조 + OSD "ALTHOLD : LANDING"(전 기체, v8, 3-4절)**, MSP DisplayPort OSD(디지털 전용, Walksnail 등), 블랙박스, ESC 센서, BLHeli 4way(Bluejay / AM32), 커스텀 CLI 파라미터 4종
 - 시리얼 포트의 `131073`(MSP + VTX_MSP) 설정은 그대로 두어도 되지만 VTX_MSP는 빌드에 없어 VTX 제어만 빠진다. OSD 표시는 MSP DisplayPort(디지털)로 유지된다.
 - 자세한 기체별 표는 [BUILD_OPTIONS.md](BUILD_OPTIONS.md).
 
 ## 6. 주의
 
-- F722 보드는 플래시 사용률이 71~76%다. 기능 추가 시 다시 확인한다.
+- F722 보드는 플래시 사용률이 73.6~79.0%다(v8 기준). 기능 추가 시 다시 확인한다.
 - `mixer_type = EZLANDING`이 켜져 있으면 Alt Hold 하강 제동에 영향을 줄 수 있으니 시험 전에 확인한다.
 - Pavo25 V2는 자력계가 없다 — Position Hold 동작(자력계 없이 헤딩 추정)을 벤치에서 먼저 확인한다. 이 기체의 CLI 덤프는 Betaflight 4.5.5 기준(오래됨)이니 플래시 전 최신 `diff all`로 재확인한다.
 - **MARIO5(CRSF)/AOS_UL7_O4(FPort)/X8_5INCH(FPort)는 수신기 프로토콜이 CLI로 확정되지 않는다** — CLI에 `serialrx_provider`가 없어 가정한 값이다(자세한 내용: [BUILD_OPTIONS.md](BUILD_OPTIONS.md) 주석 2). 틀리면 플래시 후 수신기가 바인드되지 않으니 벤치에서 먼저 확인한다.
 - **Alt Hold 해제 대기(v6/v7, 3-3절)**: 스위치를 꺼도 스틱이 `ap_hover_throttle` ±5% 안에 들어오거나(또는 빠르게 그 값을 가로지르거나) 하기 전까지는 고도가 계속 유지된다 — 스위치만 끄면 즉시 수동 스로틀로 넘어가던 이전 동작과 다르다. **대기 중에는 앵글(자동 수평) 자세 그대로이고, 스로틀을 아무리 내려도 하강하지 않는다** — 설계된 동작이지만 처음 접하면 "스로틀을 내렸는데 안 떨어진다"고 당황할 수 있으니 반드시 미리 숙지한다. OSD의 "ALT WAIT" 표시를 보고 스틱을 호버 근처로 가져와야(또는 반대편으로 빠르게 넘겨야) 해제된다는 점을 비행 전 벤치에서 먼저 확인한다(3-3절 "검증" 참고).
+- **Alt Hold 착륙 보조(v8, 3-4절)**: Airmode를 끈 상태로 Alt Hold 중이면 지면 근처(5m/2m 이하)에서 수직 속도 상한이 `gps_rescue_descend_rate` 기반으로 자동으로 낮아진다 — `alt_hold_climb_rate`를 높게 설정해 둔 기체라면 착지 직전 체감 하강/상승 속도가 평소보다 느려질 수 있으니 비행 전 벤치에서 OSD "ALTHOLD : LANDING" 표시와 함께 먼저 확인한다. `gps_rescue_descend_rate`가 너무 낮으면 착륙 보조 구간의 속도도 같이 낮아진다는 점에 유의한다.

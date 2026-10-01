@@ -46,6 +46,9 @@ extern "C" {
 
     #include "pg/alt_hold.h"
     #include "pg/autopilot.h"
+#ifdef USE_GPS_RESCUE
+    #include "pg/gps_rescue.h"
+#endif
 
     #include "sensors/acceleration.h"
     #include "sensors/gyro.h"
@@ -53,6 +56,9 @@ extern "C" {
     PG_REGISTER(accelerometerConfig_t, accelerometerConfig, PG_ACCELEROMETER_CONFIG, 0);
     PG_REGISTER(altHoldConfig_t, altHoldConfig, PG_ALTHOLD_CONFIG, 0);
     PG_REGISTER(autopilotConfig_t, autopilotConfig, PG_AUTOPILOT, 0);
+#ifdef USE_GPS_RESCUE
+    PG_REGISTER(gpsRescueConfig_t, gpsRescueConfig, PG_GPS_RESCUE, 0);
+#endif
     PG_REGISTER(gyroConfig_t, gyroConfig, PG_GYRO_CONFIG, 0);
     PG_REGISTER(positionConfig_t, positionConfig, PG_POSITION, 0);
     PG_REGISTER(rcControlsConfig_t, rcControlsConfig, PG_RC_CONTROLS_CONFIG, 0);
@@ -60,10 +66,14 @@ extern "C" {
     bool failsafeIsActive(void) { return false; }
     timeUs_t currentTimeUs = 0;
     bool isAltHoldActive();
+    bool isAltHoldLandingMode(void);
     extern float testAltitudeCm;
     extern float testAltitudeDerivativeCmS;
     extern float testCosTiltAngle;
     extern throttleStatus_e testThrottleStatus;
+    extern bool testAirmodeEnabled;
+    // prefix of altHoldState_t (alt_hold_multirotor.c), for observing the commanded vertical velocity
+    extern struct { bool isActive; float targetAltitudeCm; float maxVelocity; float targetVelocity; } altHold;
 }
 
 #include "unittest_macros.h"
@@ -275,6 +285,145 @@ TEST_F(AltholdCustomSim, SwitchOffWhileNotActiveDoesNotStartExitHold)
     EXPECT_FALSE(modeOn());
 }
 
+// ---- custom-patch: landing assist (Alt Hold + Airmode OFF) ----
+// Ported from jsungho/betaflight2026.6.x_custom, custom-patch/alt-hold-throttle-range-2026.6.2,
+// commits 90d5d9c/f29a459/0f78e2e/e2c4e83, adapted to 2025.12.5 (getAltitudeCm()/altHold.maxVelocity).
+#ifdef USE_GPS_RESCUE
+class AltholdLandingAssist : public AltholdCustomSim {
+protected:
+    void SetUp() override {
+        AltholdCustomSim::SetUp();
+        armingFlags |= ARMED;
+        testAirmodeEnabled = false;
+        gpsRescueConfigMutable()->descendRate = 150;      // gps_rescue_descend_rate (cm/s)
+        altHoldConfigMutable()->climbRate = 70;           // 700 cm/s
+        altHoldInit();
+        run(true, 1400, 20);                              // enter, latch
+        run(true, 1000, 5);                               // stick full low (released latch), fullLowIsMaxDescend
+    }
+    void TearDown() override { armingFlags &= ~ARMED; testAirmodeEnabled = true; }
+};
+
+TEST_F(AltholdLandingAssist, AboveFiveMetersUsesAltHoldClimbRate)
+{
+    testAltitudeCm = 800.0f;
+    run(true, 1000, 3);
+    EXPECT_NEAR(altHold.targetVelocity, -700.0f, 1.0f);
+}
+
+TEST_F(AltholdLandingAssist, BelowFiveMetersUsesTwiceDescendRate)
+{
+    testAltitudeCm = 450.0f;
+    run(true, 1000, 3);
+    EXPECT_NEAR(altHold.targetVelocity, -300.0f, 1.0f);
+    testAltitudeCm = 201.0f;
+    run(true, 1000, 3);
+    EXPECT_NEAR(altHold.targetVelocity, -300.0f, 1.0f);
+}
+
+TEST_F(AltholdLandingAssist, BelowTwoMetersUsesDescendRate)
+{
+    testAltitudeCm = 150.0f;
+    run(true, 1000, 3);
+    EXPECT_NEAR(altHold.targetVelocity, -150.0f, 1.0f);
+    testAltitudeCm = 0.0f;
+    run(true, 1000, 3);
+    EXPECT_NEAR(altHold.targetVelocity, -150.0f, 1.0f);
+}
+
+TEST_F(AltholdLandingAssist, AirmodeOnKeepsAltHoldClimbRateEvenLow)
+{
+    testAltitudeCm = 150.0f;
+    testAirmodeEnabled = true;
+    run(true, 1000, 3);
+    EXPECT_NEAR(altHold.targetVelocity, -700.0f, 1.0f);
+}
+
+TEST_F(AltholdLandingAssist, PartialStickScalesWithLandingRate)
+{
+    testAltitudeCm = 150.0f;
+    run(true, 1200, 3);                                   // halfway between hover(1400) and 1000 => factor -0.5
+    EXPECT_NEAR(altHold.targetVelocity, -75.0f, 1.0f);
+}
+
+TEST_F(AltholdLandingAssist, ClimbAlsoCappedWhileLanding)
+{
+    testAltitudeCm = 150.0f;
+    run(true, 2000, 3);                                   // full stick up, airmode off, below 2 m
+    EXPECT_NEAR(altHold.targetVelocity, 150.0f, 1.0f);
+}
+
+TEST_F(AltholdLandingAssist, LandingModeHasHysteresisFiveOnFivePointFiveOff)
+{
+    testAltitudeCm = 501.0f;
+    isAltHoldLandingMode();                    // SetUp latched at altitude 0; leave it by going high first
+    testAltitudeCm = 800.0f;
+    EXPECT_FALSE(isAltHoldLandingMode());      // above 5.5 m: off
+    testAltitudeCm = 520.0f;
+    EXPECT_FALSE(isAltHoldLandingMode());      // between 5.0 and 5.5 m while off: stays off
+    testAltitudeCm = 500.0f;
+    EXPECT_TRUE(isAltHoldLandingMode());       // reaches 5.0 m: on
+    testAltitudeCm = 549.0f;
+    EXPECT_TRUE(isAltHoldLandingMode());       // between 5.0 and 5.5 m while on: stays on
+    testAltitudeCm = 551.0f;
+    EXPECT_FALSE(isAltHoldLandingMode());      // above 5.5 m: off
+    testAltitudeCm = 100.0f;
+    EXPECT_TRUE(isAltHoldLandingMode());
+}
+
+TEST_F(AltholdLandingAssist, TwoMeterBoundaryHasHysteresisOneEightOnTwoTwoOff)
+{
+    testAltitudeCm = 400.0f;
+    run(true, 1000, 3);
+    EXPECT_NEAR(altHold.targetVelocity, -300.0f, 1.0f);   // x2
+    testAltitudeCm = 190.0f;                              // 1.9 m coming down: not yet x1
+    run(true, 1000, 3);
+    EXPECT_NEAR(altHold.targetVelocity, -300.0f, 1.0f);
+    testAltitudeCm = 180.0f;                              // 1.8 m: x1
+    run(true, 1000, 3);
+    EXPECT_NEAR(altHold.targetVelocity, -150.0f, 1.0f);
+    testAltitudeCm = 215.0f;                              // 2.15 m wobbling up: stays x1
+    run(true, 1000, 3);
+    EXPECT_NEAR(altHold.targetVelocity, -150.0f, 1.0f);
+    testAltitudeCm = 225.0f;                              // above 2.2 m: back to x2
+    run(true, 1000, 3);
+    EXPECT_NEAR(altHold.targetVelocity, -300.0f, 1.0f);
+    testAltitudeCm = 210.0f;                              // between 1.8 and 2.2 while x2: stays x2
+    run(true, 1000, 3);
+    EXPECT_NEAR(altHold.targetVelocity, -300.0f, 1.0f);
+}
+
+TEST_F(AltholdLandingAssist, HysteresisAlsoAppliesToRateCap)
+{
+    testAltitudeCm = 800.0f;
+    run(true, 1000, 3);
+    EXPECT_NEAR(altHold.targetVelocity, -700.0f, 1.0f);
+    testAltitudeCm = 520.0f;                   // coming down through 5.2 m: not yet landing assist
+    run(true, 1000, 3);
+    EXPECT_NEAR(altHold.targetVelocity, -700.0f, 1.0f);
+    testAltitudeCm = 480.0f;
+    run(true, 1000, 3);
+    EXPECT_NEAR(altHold.targetVelocity, -300.0f, 1.0f);
+    testAltitudeCm = 530.0f;                   // wobbling up to 5.3 m: stays at x2 rate
+    run(true, 1000, 3);
+    EXPECT_NEAR(altHold.targetVelocity, -300.0f, 1.0f);
+    testAltitudeCm = 560.0f;
+    run(true, 1000, 3);
+    EXPECT_NEAR(altHold.targetVelocity, -700.0f, 1.0f);
+}
+
+TEST_F(AltholdLandingAssist, LandingModeFlagFollowsAirmodeAndArming)
+{
+    EXPECT_TRUE(isAltHoldLandingMode());
+    testAirmodeEnabled = true;
+    EXPECT_FALSE(isAltHoldLandingMode());
+    testAirmodeEnabled = false;
+    EXPECT_TRUE(isAltHoldLandingMode());
+    armingFlags &= ~ARMED;
+    EXPECT_FALSE(isAltHoldLandingMode());
+}
+#endif // USE_GPS_RESCUE
+
 // STUBS
 
 extern "C" {
@@ -315,4 +464,7 @@ extern "C" {
     throttleStatus_e calculateThrottleStatus() {
         return testThrottleStatus;
     }
+
+    bool testAirmodeEnabled = true;
+    bool isAirmodeEnabled(void) { return testAirmodeEnabled; }
 }
