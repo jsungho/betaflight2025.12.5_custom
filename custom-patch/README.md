@@ -10,7 +10,9 @@
 
 **v7: 해제 대기의 "호버 구간 건너뜀" 결함을 수정했다.** 스틱을 빠르게 움직이면 매 사이클(10ms) 사이에 `ap_hover_throttle` ±5% 구간을 통째로 건너뛰어 해제가 안 되는 경우가 있었다 — 직전 사이클의 스틱 값을 같이 저장해, 이번 사이클과 직전 사이클 사이에 호버값을 가로질렀으면(구간 안에 들어오지 않고 지나쳤어도) 그 자리에서 해제하도록 고쳤다. 위/아래 양방향 모두 적용. CLI 항목 없음, PG 버전 변경 없음. 자세한 내용은 3-3절 참고. 호스트(PC)에서 돌리는 시뮬레이션 유닛테스트(`src/test/unit/althold_unittest.cc`)로 진입 래치/해제 대기/호버 가로지름/스위치 재투입/디스암 시나리오를 검증했다(v7 당시 13개 테스트, `_v7_slim`).
 
-**v8(현재): Alt Hold 착륙 보조(Landing Assist)를 추가했다.** Alt Hold 중 Airmode가 꺼져 있으면(=착륙 중으로 간주) 고도에 따라 수직 속도 상한을 `gps_rescue_descend_rate` 기반 값으로 낮춰, 착지 직전 과도한 상승/하강을 막는다. 히스테리시스(5.0m/5.5m, 1.8m/2.2m)로 경계에서 떨림이 없게 했고, OSD에 "ALTHOLD : LANDING"을 표시한다. CLI 항목 없음, PG 버전 변경 없음. 자세한 내용은 3-4절 참고. 호스트(PC) 시뮬레이션 유닛테스트에 `AltholdLandingAssist` 10개를 추가해 총 23개 테스트로 검증했다. 파일명 접미사가 `_v3_slim` → `_v4_slim` → `_v5_slim` → `_v6_slim` → `_v7_slim` → `_v8_slim`으로 바뀌었다.
+**v8: Alt Hold 착륙 보조(Landing Assist)를 추가했다.** Alt Hold 중 Airmode가 꺼져 있으면(=착륙 중으로 간주) 고도에 따라 수직 속도 상한을 `gps_rescue_descend_rate` 기반 값으로 낮춰, 착지 직전 과도한 상승/하강을 막는다. 히스테리시스(5.0m/5.5m, 1.8m/2.2m)로 경계에서 떨림이 없게 했고, OSD에 "ALTHOLD : LANDING"을 표시한다. CLI 항목 없음, PG 버전 변경 없음. 자세한 내용은 3-4절 참고. 호스트(PC) 시뮬레이션 유닛테스트에 `AltholdLandingAssist` 10개를 추가해 총 23개 테스트로 검증했다. 파일명 접미사가 `_v3_slim` → `_v4_slim` → `_v5_slim` → `_v6_slim` → `_v7_slim` → `_v8_slim` → `_v9_slim`으로 바뀌었다.
+
+**v9(현재): `alt_hold_hover_throttle` 값 검증 + 적용 범위 한정.** (1) 허용값은 **0 또는 1100~1700**이다. CLI 범위(0~1700)는 그대로라 `1`, `500` 같은 값도 저장은 되지만, 1100 미만/1700 초과의 0이 아닌 값은 **무시(0으로 간주)** 되어 `ap_hover_throttle`을 쓴다. (2) 이 값은 **조종자가 Alt Hold / Position Hold 스위치로 켠 경우에만** 쓴다. 페일세이프 착륙(페일세이프도 `ALT_HOLD_MODE`를 켠다)과 GPS Rescue는 `ap_hover_throttle`을 쓴다(페일세이프가 해제되면 다시 `alt_hold_hover_throttle`). 이 버전(2025.12.5)에는 `AUTOPILOT_MODE`가 없어 해당 조건은 코드에 없다. CLI 항목 없음, PG 버전 변경 없음. 자세한 내용은 3-5절 참고. 호스트 유닛테스트 `AltholdHoverThrottle` 5개를 추가해 총 30개로 검증했다. 파일명 접미사는 `_v9_slim`.
 
 - 브랜치: `custom-patch/alt-hold-throttle-range`
 - 참고 이슈: betaflight/betaflight#15775
@@ -24,16 +26,16 @@
 
 | 기체 | 파일 |
 |---|---|
-| MARIO5 (CRSF, PINIO 유지) | `betaflight_2025.12.5_STM32F405_SPEEDYBEEF405V4_MARIO5_custom_v8_slim.hex` |
-| AOS_UL7_O4 (FPort, LED 스트립 제거) | `betaflight_2025.12.5_STM32F405_SPEEDYBEEF405V4_AOSUL7O4_custom_v8_slim.hex` |
-| Mark4_6in | `betaflight_2025.12.5_STM32F405_JHEF405PRO_MARK4_6IN_custom_v8_slim.hex` |
-| TJRC_10 | `betaflight_2025.12.5_STM32F7X2_MATEKF722SE_TJRC10_custom_v8_slim.hex` |
-| 8IN-KOPIS_X8 | `betaflight_2025.12.5_STM32F7X2_SPEEDYBEEF7V3_8INKOPISX8_custom_v8_slim.hex` |
-| CHIMERA7 | `betaflight_2025.12.5_STM32F7X2_FLYWOOF722PROV2_CHIMERA7_custom_v8_slim.hex` |
-| AOS_UL7_X8 | `betaflight_2025.12.5_STM32F7X2_MATEKF722HD_AOSUL7X8_custom_v8_slim.hex` |
-| Explorer LR4 | `betaflight_2025.12.5_STM32F7X2_JHEF7DUAL_EXPLORERLR4_custom_v8_slim.hex` |
-| Pavo25 V2 (CRSF, PINIO, **자력계 없음**, LED 없음) | `betaflight_2025.12.5_STM32F7X2_JHEF7DUAL_PAVO25V2_custom_v8_slim.hex` |
-| X8_5INCH | `betaflight_2025.12.5_STM32H743_MATEKH743_X8_5INCH_custom_v8_slim.hex` |
+| MARIO5 (CRSF, PINIO 유지) | `betaflight_2025.12.5_STM32F405_SPEEDYBEEF405V4_MARIO5_custom_v9_slim.hex` |
+| AOS_UL7_O4 (FPort, LED 스트립 제거) | `betaflight_2025.12.5_STM32F405_SPEEDYBEEF405V4_AOSUL7O4_custom_v9_slim.hex` |
+| Mark4_6in | `betaflight_2025.12.5_STM32F405_JHEF405PRO_MARK4_6IN_custom_v9_slim.hex` |
+| TJRC_10 | `betaflight_2025.12.5_STM32F7X2_MATEKF722SE_TJRC10_custom_v9_slim.hex` |
+| 8IN-KOPIS_X8 | `betaflight_2025.12.5_STM32F7X2_SPEEDYBEEF7V3_8INKOPISX8_custom_v9_slim.hex` |
+| CHIMERA7 | `betaflight_2025.12.5_STM32F7X2_FLYWOOF722PROV2_CHIMERA7_custom_v9_slim.hex` |
+| AOS_UL7_X8 | `betaflight_2025.12.5_STM32F7X2_MATEKF722HD_AOSUL7X8_custom_v9_slim.hex` |
+| Explorer LR4 | `betaflight_2025.12.5_STM32F7X2_JHEF7DUAL_EXPLORERLR4_custom_v9_slim.hex` |
+| Pavo25 V2 (CRSF, PINIO, **자력계 없음**, LED 없음) | `betaflight_2025.12.5_STM32F7X2_JHEF7DUAL_PAVO25V2_custom_v9_slim.hex` |
+| X8_5INCH | `betaflight_2025.12.5_STM32H743_MATEKH743_X8_5INCH_custom_v9_slim.hex` |
 
 보드가 다르면 잘못된 hex다. MARIO5와 AOS_UL7_O4는 같은 FC(SPEEDYBEEF405V4), Pavo25 V2와 Explorer LR4는 같은 FC(JHEF7DUAL)라서 파일명 라벨(MARIO5 / AOSUL7O4 / PAVO25V2 / EXPLORERLR4)까지 확인해야 한다. 파일명의 보드 이름이 기체 FC와 같은지 확인한 뒤 Betaflight Configurator의 **Load Firmware [Local]**로 올린다.
 
@@ -54,7 +56,7 @@ F405/H743 기체(MARIO5, AOS_UL7_O4, Mark4_6in, X8_5INCH)는 MCU 플래시가 1M
 |---|---|---|---|
 | `alt_hold_deadband_low` | 0–70 (%) | 20 | Alt Hold 하강 쪽 스틱 데드밴드. 기존 `alt_hold_deadband`(상승 쪽)와 독립적으로 설정. 기본값은 기존 동작과 같음 |
 | `alt_hold_full_low_is_max_descend` | OFF / ON | OFF | ON이면 스로틀을 min_check 아래(완전 저)로 내렸을 때 최대 하강 속도로 내려간다. OFF면 기존처럼 호버 유지 |
-| `alt_hold_hover_throttle` | 0–1700 | 0 | Alt Hold / Position Hold 전용 호버 스로틀. 0이면 기존 동작(`ap_hover_throttle` 상속). 0이 아니면 GPS Rescue와 별개로 우선 적용된다. GPS Rescue는 영향을 받지 않는다 |
+| `alt_hold_hover_throttle` | 0–1700 (허용값: 0 또는 1100~1700) | 0 | 조종자가 스위치로 켠 Alt Hold / Position Hold 전용 호버 스로틀. 0이면 `ap_hover_throttle` 상속. 1100 미만/1700 초과의 0이 아닌 값은 무시(0으로 간주)된다. 페일세이프 착륙, AUTOPILOT, GPS Rescue는 이 값을 쓰지 않고 `ap_hover_throttle`을 쓴다(v9, 3-5절) |
 | `landing_disarm_airmode_off_only` | OFF / ON | OFF | ON이면 EZ Disarm(`landing_disarm_threshold`)이 Airmode가 꺼진 상태에서만 동작. 착륙 시 AUX로 Airmode를 끄고 착륙하는 운용용. 프로파일별 설정 |
 
 동작 요약
@@ -93,7 +95,7 @@ save
 | `min_check` | `1050` | 스로틀 로우엔드 체크 값(이 값 미만 = 스로틀 로우로 판정) |
 | `alt_hold_climb_rate` | `70` | Alt Hold 상승 속도(cm/s 단위 스케일) |
 | `alt_hold_deadband` | `25` | Alt Hold 상승 쪽(HIGH) 데드밴드. 이 저장소가 추가한 `alt_hold_deadband_low`(하강 쪽)와 쌍을 이룸 |
-| `alt_hold_hover_throttle` | `1400` | 이 저장소가 추가한 Alt Hold/Position Hold 전용 호버 스로틀(3절 참고). `ap_hover_throttle` 상속 대신 1400을 고정값으로 사용 |
+| `alt_hold_hover_throttle` | `1400` | 이 저장소가 추가한 Alt Hold/Position Hold 전용 호버 스로틀(3절 참고). 유효값(1100~1700)이라 스위치로 켠 Alt Hold/Position Hold에서만 1400을 사용(페일세이프/GPS Rescue는 `ap_hover_throttle`) |
 | `gps_rescue_descend_rate` | `135` | GPS Rescue 하강 속도 |
 | `gps_rescue_disarm_threshold` | `60` | GPS Rescue 착지 판정 후 디스암 임계값(가속도 저크) |
 | `gps_rescue_use_mag` | `ON` | GPS Rescue 시 자력계 헤딩 사용(자력계 없는 Pavo25 V2는 해당 없음 — 아래 주 참고) |
@@ -193,6 +195,21 @@ CLI 파라미터가 아니라 코드에 고정된 동작이다(PG 버전 변경 
 
 검증: 호스트(PC) 시뮬레이션에 `AltholdLandingAssist` 10개 테스트를 추가(총 23개). 5m 초과 시 `alt_hold_climb_rate` 그대로, 5m/2m 이하 구간별 배율, Airmode ON 시 미적용, 스틱 부분 입력 비율 유지, 상승 속도도 동일 상한 적용, 5.0m/5.5m 및 1.8m/2.2m 히스테리시스(경계 사이에서 상태 유지), `isAltHoldLandingMode()`가 Airmode/시동 상태를 따르는지까지 확인(실행: `cd src/test && make test_althold_unittest`).
 
+## 3-5. alt_hold_hover_throttle 검증과 적용 범위 (v9)
+
+| 항목 | 동작 |
+|---|---|
+| 허용값 | 0 또는 1100~1700 (경계 포함). CLI 범위는 0~1700 그대로 |
+| 범위 밖 값(예 1, 500, 1099, 1701) | 저장은 되지만 사용 시 0으로 간주 → `ap_hover_throttle` 사용 |
+| 0 | `ap_hover_throttle` 상속(기존 동작) |
+| 스위치로 켠 Alt Hold / Position Hold | 유효한 `alt_hold_hover_throttle`을 호버 기준(고도 제어 호버 + 스틱 데드밴드 중심)으로 사용 |
+| 페일세이프 착륙 | `failsafeIsActive()` 동안 `ap_hover_throttle` 사용, 해제되면 다시 `alt_hold_hover_throttle` |
+| AUTOPILOT 모드 | 2025.12.5에는 `AUTOPILOT_MODE`가 없어 해당 없음(추가되면 같은 조건에 포함) |
+| GPS Rescue | 기존대로 Alt Hold가 꺼지고 `ap_hover_throttle` 사용(변경 없음) |
+| 해제 대기(3-3절) 기준 | 기존대로 `ap_hover_throttle` (0이면 유효한 `alt_hold_hover_throttle`로 폴백) |
+
+구현: `alt_hold_multirotor.c`에 `ALT_HOLD_HOVER_THROTTLE_VALID_MIN/MAX`(1100/1700)와 `altHoldGetHoverThrottle()`을 추가했다. 이 버전에는 "진입 순간 호버 캡처"가 없으므로(2026.6.2의 `autopilotCaptureHoverThrottleForAltHold`에 해당하는 코드 없음) 기존에 `altHoldInit()`에서 한 번 고정하던 `altHold.hoverThrottle`을, 사용 시점마다 `failsafeIsActive()`를 보고 정하는 함수로 바꿨다.
+
 ## 4. 플래시 후 알려진 오류 줄 (무시 가능)
 
 - VTX 관련: `osd_vtx_channel_pos`, `osd_sys_vtx_temp_pos` 등 (VTX 제어 기능 제거)
@@ -210,7 +227,7 @@ CLI 파라미터가 아니라 코드에 고정된 동작이다(PG 버전 변경 
 
 ## 6. 주의
 
-- F722 보드는 플래시 사용률이 73.6~79.0%다(v8 기준). 기능 추가 시 다시 확인한다.
+- F722 보드는 플래시 사용률이 73.6~79.0%다(v9 기준). 기능 추가 시 다시 확인한다.
 - `mixer_type = EZLANDING`이 켜져 있으면 Alt Hold 하강 제동에 영향을 줄 수 있으니 시험 전에 확인한다.
 - Pavo25 V2는 자력계가 없다 — Position Hold 동작(자력계 없이 헤딩 추정)을 벤치에서 먼저 확인한다. 이 기체의 CLI 덤프는 Betaflight 4.5.5 기준(오래됨)이니 플래시 전 최신 `diff all`로 재확인한다.
 - **MARIO5(CRSF)/AOS_UL7_O4(FPort)/X8_5INCH(FPort)는 수신기 프로토콜이 CLI로 확정되지 않는다** — CLI에 `serialrx_provider`가 없어 가정한 값이다(자세한 내용: [BUILD_OPTIONS.md](BUILD_OPTIONS.md) 주석 2). 틀리면 플래시 후 수신기가 바인드되지 않으니 벤치에서 먼저 확인한다.

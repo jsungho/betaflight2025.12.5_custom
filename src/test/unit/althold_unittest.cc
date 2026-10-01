@@ -290,6 +290,71 @@ TEST_F(AltholdCustomSim, SwitchOffWhileNotActiveDoesNotStartExitHold)
 // ---- custom-patch: landing assist (Alt Hold + Airmode OFF) ----
 // Ported from jsungho/betaflight2026.6.x_custom, custom-patch/alt-hold-throttle-range-2026.6.2,
 // commits 90d5d9c/f29a459/0f78e2e/e2c4e83, adapted to 2025.12.5 (getAltitudeCm()/altHold.maxVelocity).
+// ---- custom-patch: alt_hold_hover_throttle validation / pilot-switch-only use ----
+// climbRate = 0 freezes the target, so with zero error the commanded throttle is exactly the hover baseline.
+class AltholdHoverThrottle : public AltholdCustomSim {
+protected:
+    void SetUp() override {
+        AltholdCustomSim::SetUp();
+        altHoldConfigMutable()->climbRate = 0;
+        altHoldInit();
+        testFailsafeActive = false;
+    }
+    void TearDown() override { testFailsafeActive = false; }
+    // throttle altitudeControl() outputs for a hover baseline (mincheck 1050 .. 2000 scaling, see altitudeControl())
+    static float pwmFor(float hover) { return 1000.0f + 1000.0f * (hover - 1050.0f) / 950.0f; }
+};
+
+TEST_F(AltholdHoverThrottle, ValidAltHoldHoverIsUsedForSwitchAltHold)
+{
+    run(true, 1400, 50);
+    EXPECT_TRUE(modeOn());
+    EXPECT_NEAR(thrPwm(), pwmFor(1400), 1.0f);     // alt_hold_hover_throttle (1400), not ap_hover_throttle (1300)
+}
+
+TEST_F(AltholdHoverThrottle, FailsafeUsesApHoverAndReturnsToAltHoldHover)
+{
+    run(true, 1400, 50);
+    EXPECT_NEAR(thrPwm(), pwmFor(1400), 1.0f);
+    testFailsafeActive = true;
+    run(true, 1400, 1);
+    EXPECT_NEAR(thrPwm(), pwmFor(1300), 1.0f);     // failsafe landing: ap_hover_throttle
+    testFailsafeActive = false;
+    run(true, 1400, 1);
+    EXPECT_NEAR(thrPwm(), pwmFor(1400), 1.0f);     // released: back to alt_hold_hover_throttle
+}
+
+TEST_F(AltholdHoverThrottle, OutOfRangeAltHoldHoverIsIgnored)
+{
+    const uint16_t invalid[] = { 1, 500, 1099, 1701 };
+    for (uint16_t v : invalid) {
+        altHoldConfigMutable()->hoverThrottle = v;
+        altHoldInit();
+        run(false, 1000, 1);                       // leave Alt Hold between cases
+        flightModeFlags = 0;
+        run(true, 1300, 50);
+        EXPECT_TRUE(modeOn()) << v;
+        EXPECT_NEAR(thrPwm(), pwmFor(1300), 1.0f) << "alt_hold_hover_throttle=" << v;   // ap_hover_throttle
+    }
+}
+
+TEST_F(AltholdHoverThrottle, BoundaryValuesAre1100And1700)
+{
+    altHoldConfigMutable()->hoverThrottle = 1100;
+    run(true, 1100, 50);
+    EXPECT_NEAR(thrPwm(), pwmFor(1100), 1.0f);
+    altHoldConfigMutable()->hoverThrottle = 1700;
+    run(true, 1700, 50);
+    EXPECT_NEAR(thrPwm(), pwmFor(1700), 1.0f);
+}
+
+TEST_F(AltholdHoverThrottle, ZeroInheritsApHover)
+{
+    altHoldConfigMutable()->hoverThrottle = 0;
+    run(true, 1300, 50);
+    EXPECT_NEAR(thrPwm(), pwmFor(1300), 1.0f);
+}
+
 #ifdef USE_GPS_RESCUE
 class AltholdLandingAssist : public AltholdCustomSim {
 protected:

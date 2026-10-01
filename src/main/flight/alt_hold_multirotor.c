@@ -64,7 +64,6 @@ typedef struct {
     float deadbandLow;   // custom-patch: low-side (descend) deadband, independent of deadband; see betaflight/betaflight#15775
     bool allowStickAdjustment;
     bool fullLowIsMaxDescend; // custom-patch: see betaflight/betaflight#15775
-    float hoverThrottle; // custom-patch: independent hover throttle for Alt Hold/Position Hold; see betaflight/betaflight#15775
     bool entryLatched;   // custom-patch: throttle stick still within 5% of its position on entry
     float entryThrottle; // custom-patch: rcCommand[THROTTLE] captured on entry
     bool exitPending;    // custom-patch: switch is off, still holding altitude until stick reaches hover
@@ -131,6 +130,31 @@ static void altHoldReset(void)
     altHold.targetVelocity = 0.0f;
 }
 
+// custom-patch: alt_hold_hover_throttle is only honoured inside this valid window; the CLI range stays 0..1700
+// but any nonzero value outside 1100..1700 (e.g. 1 or 500) is treated as 0 ("inherit ap_hover_throttle")
+#define ALT_HOLD_HOVER_THROTTLE_VALID_MIN 1100
+#define ALT_HOLD_HOVER_THROTTLE_VALID_MAX 1700
+
+static uint16_t altHoldValidHoverThrottle(void)
+{
+    const uint16_t hover = altHoldConfig()->hoverThrottle;
+    return (hover >= ALT_HOLD_HOVER_THROTTLE_VALID_MIN && hover <= ALT_HOLD_HOVER_THROTTLE_VALID_MAX) ? hover : 0;
+}
+
+// custom-patch: hover baseline for Alt Hold/Position Hold, evaluated at every use.
+// alt_hold_hover_throttle applies only to the pilot's own Alt Hold / Position Hold switch. Failsafe landing also runs
+// through ALT_HOLD_MODE, so while failsafeIsActive() it uses ap_hover_throttle like GPS Rescue does.
+// (This tree has no AUTOPILOT_MODE flight mode; if one is ever added it belongs in the same condition.)
+static float altHoldGetHoverThrottle(void)
+{
+    const uint16_t altHoldHover = altHoldValidHoverThrottle();
+    const uint16_t apHover = autopilotConfig()->hoverThrottle;
+    if (altHoldHover != 0 && !failsafeIsActive()) {
+        return altHoldHover;
+    }
+    return apHover != 0 ? (float)apHover : (float)altHoldHover;
+}
+
 void altHoldInit(void)
 {
     altHold.isActive = false;
@@ -142,9 +166,6 @@ void altHoldInit(void)
     altHold.deadbandLow = altHoldConfig()->deadbandLow / 100.0f; // custom-patch: see betaflight/betaflight#15775
     altHold.allowStickAdjustment = altHoldConfig()->deadband;
     altHold.fullLowIsMaxDescend = altHoldConfig()->fullLowIsMaxDescend; // custom-patch: see betaflight/betaflight#15775
-    // custom-patch: alt_hold_hover_throttle = 0 (default) means "inherit ap_hover_throttle";
-    // a nonzero value makes Alt Hold/Position Hold independent of GPS Rescue's hover throttle; see betaflight/betaflight#15775
-    altHold.hoverThrottle = altHoldConfig()->hoverThrottle ? altHoldConfig()->hoverThrottle : autopilotConfig()->hoverThrottle;
     altHold.maxVelocity = altHoldConfig()->climbRate * 10.0f; // 50 in CLI means 500cm/s
     altHoldReset();
 }
@@ -196,9 +217,10 @@ static void altHoldUpdateTargetAltitude(void)
             const float rcThrottle = rcCommand[THROTTLE];
             // custom-patch: low (descend) and high (climb) thresholds are now independently configurable
             // via alt_hold_deadband (high) and alt_hold_deadband_low (low), and are centered on
-            // altHold.hoverThrottle (alt_hold_hover_throttle if set, else ap_hover_throttle); see betaflight/betaflight#15775
-            const float lowThreshold = altHold.hoverThrottle - altHold.deadbandLow * (altHold.hoverThrottle - PWM_RANGE_MIN);
-            const float highThreshold = altHold.hoverThrottle + altHold.deadband * (PWM_RANGE_MAX - altHold.hoverThrottle);
+            // altHoldGetHoverThrottle() (valid alt_hold_hover_throttle if set, else ap_hover_throttle); see betaflight/betaflight#15775
+            const float hoverThrottle = altHoldGetHoverThrottle();
+            const float lowThreshold = hoverThrottle - altHold.deadbandLow * (hoverThrottle - PWM_RANGE_MIN);
+            const float highThreshold = hoverThrottle + altHold.deadband * (PWM_RANGE_MAX - hoverThrottle);
 
             if (rcThrottle < lowThreshold) {
                 stickFactor = scaleRangef(rcThrottle, PWM_RANGE_MIN, lowThreshold, -1.0f, 0.0f);
@@ -243,7 +265,7 @@ static void altHoldUpdate(void)
         altHoldUpdateTargetAltitude();
     }
     // custom-patch: pass Alt Hold/Position Hold's own hoverThrottle instead of the GPS-Rescue-shared value; see betaflight/betaflight#15775
-    altitudeControl(altHold.targetAltitudeCm, taskIntervalSeconds, altHold.targetVelocity, altHold.hoverThrottle);
+    altitudeControl(altHold.targetAltitudeCm, taskIntervalSeconds, altHold.targetVelocity, altHoldGetHoverThrottle());
 }
 
 void updateAltHold(timeUs_t currentTimeUs) {
@@ -297,9 +319,9 @@ bool altHoldRequestActive(bool switchOn)
     if (altHold.exitPending) {
         // custom-patch: reference is ap_hover_throttle (autopilotConfig()->hoverThrottle), not
         // alt_hold_hover_throttle/thr_mid; if ap_hover_throttle is 0, fall back to Alt Hold's own effective
-        // hover value (altHold.hoverThrottle, computed in altHoldInit from alt_hold_hover_throttle/ap_hover_throttle)
+        // valid alt_hold_hover_throttle (1100..1700; out-of-range values count as 0)
         const uint16_t apHover = autopilotConfig()->hoverThrottle;
-        const float hoverPwm = apHover != 0 ? (float)apHover : altHold.hoverThrottle;
+        const float hoverPwm = apHover != 0 ? (float)apHover : (float)altHoldValidHoverThrottle();
         const float prevDelta = altHold.exitPrevThrottle - hoverPwm;
         const float delta = rcCommand[THROTTLE] - hoverPwm;
         altHold.exitPrevThrottle = rcCommand[THROTTLE];
