@@ -63,7 +63,8 @@ extern "C" {
     PG_REGISTER(positionConfig_t, positionConfig, PG_POSITION, 0);
     PG_REGISTER(rcControlsConfig_t, rcControlsConfig, PG_RC_CONTROLS_CONFIG, 0);
 
-    bool failsafeIsActive(void) { return false; }
+    bool testFailsafeActive = false;
+    bool failsafeIsActive(void) { return testFailsafeActive; }
     timeUs_t currentTimeUs = 0;
     bool isAltHoldActive();
     bool isAltHoldLandingMode(void);
@@ -72,6 +73,7 @@ extern "C" {
     extern float testCosTiltAngle;
     extern throttleStatus_e testThrottleStatus;
     extern bool testAirmodeEnabled;
+    extern bool testFailsafeActive;
     // prefix of altHoldState_t (alt_hold_multirotor.c), for observing the commanded vertical velocity
     extern struct { bool isActive; float targetAltitudeCm; float maxVelocity; float targetVelocity; } altHold;
 }
@@ -301,7 +303,7 @@ protected:
         run(true, 1400, 20);                              // enter, latch
         run(true, 1000, 5);                               // stick full low (released latch), fullLowIsMaxDescend
     }
-    void TearDown() override { armingFlags &= ~ARMED; testAirmodeEnabled = true; }
+    void TearDown() override { armingFlags &= ~ARMED; testAirmodeEnabled = true; testFailsafeActive = false; }
 };
 
 TEST_F(AltholdLandingAssist, AboveFiveMetersUsesAltHoldClimbRate)
@@ -410,6 +412,29 @@ TEST_F(AltholdLandingAssist, HysteresisAlsoAppliesToRateCap)
     testAltitudeCm = 560.0f;
     run(true, 1000, 3);
     EXPECT_NEAR(altHold.targetVelocity, -700.0f, 1.0f);
+}
+
+TEST_F(AltholdLandingAssist, FailsafeKeepsItsOwnDescentLogic)
+{
+    // failsafe landing is excluded from landing assist: stickFactor = -(0.9 + clamp(alt/2000, 0.1, 9)) times the
+    // normal alt_hold_climb_rate cap (700), i.e. -1.0 * 700 at 1.5 m, not the landing assist 150
+    testAltitudeCm = 150.0f;
+    testFailsafeActive = true;
+    run(true, 1000, 3);
+    EXPECT_NEAR(altHold.targetVelocity, -700.0f, 1.0f);
+}
+
+TEST_F(AltholdLandingAssist, NearLatchIsClearedWhenAltHoldExits)
+{
+    testAltitudeCm = 150.0f;
+    run(true, 1000, 3);
+    EXPECT_NEAR(altHold.targetVelocity, -150.0f, 1.0f);   // 1.8 m latch on
+    run(false, 1300, 3);                                  // switch off with stick at ap_hover: exits at once
+    EXPECT_FALSE(modeOn());
+    testAltitudeCm = 210.0f;                              // inside the 1.8..2.2 m hysteresis window
+    run(true, 1400, 20);                                  // fresh entry
+    run(true, 1000, 5);
+    EXPECT_NEAR(altHold.targetVelocity, -300.0f, 1.0f);   // stale latch would wrongly give -150
 }
 
 TEST_F(AltholdLandingAssist, LandingModeFlagFollowsAirmodeAndArming)
