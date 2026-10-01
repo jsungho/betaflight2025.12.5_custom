@@ -341,16 +341,68 @@ TEST_F(AltholdHoverThrottle, OutOfRangeAltHoldHoverIsIgnored)
 TEST_F(AltholdHoverThrottle, BoundaryValuesAre1100And1700)
 {
     altHoldConfigMutable()->hoverThrottle = 1100;
+    altHoldInit();
     run(true, 1100, 50);
     EXPECT_NEAR(thrPwm(), pwmFor(1100), 1.0f);
     altHoldConfigMutable()->hoverThrottle = 1700;
+    altHoldInit();                                 // hover values are fixed at Alt Hold entry, so re-enter
     run(true, 1700, 50);
     EXPECT_NEAR(thrPwm(), pwmFor(1700), 1.0f);
+}
+
+TEST_F(AltholdHoverThrottle, ApHoverZeroUsesEntryStickCaptureOnlyDuringFailsafe)
+{
+    autopilotConfigMutable()->hoverThrottle = 0;           // ap_hover_throttle unset
+    altHoldInit();
+    run(true, 1200, 50);                                   // entry stick = 1200 -> captured value
+    EXPECT_NEAR(thrPwm(), pwmFor(1400), 1.0f);             // normal: validated alt_hold_hover_throttle
+    testFailsafeActive = true;
+    run(true, 1200, 1);
+    EXPECT_NEAR(thrPwm(), pwmFor(1200), 1.0f);             // failsafe: entry stick capture, not the dedicated value
+    testFailsafeActive = false;
+    run(true, 1200, 1);
+    EXPECT_NEAR(thrPwm(), pwmFor(1400), 1.0f);
+}
+
+TEST_F(AltholdHoverThrottle, ApHoverZeroNoDedicatedValueUsesStickThenDefault)
+{
+    autopilotConfigMutable()->hoverThrottle = 0;
+    altHoldConfigMutable()->hoverThrottle = 500;           // invalid -> 0
+    altHoldInit();
+    run(true, 1200, 50);
+    EXPECT_NEAR(thrPwm(), pwmFor(1200), 1.0f);             // captured stick is the only candidate
+}
+
+TEST_F(AltholdHoverThrottle, ClearedOnExitAndRecapturedOnReentry)
+{
+    autopilotConfigMutable()->hoverThrottle = 0;
+    altHoldInit();
+    run(true, 1200, 50);
+    run(false, 1200, 1);                                   // switch off, stick at 1200 (== captured hover): releases at once
+    EXPECT_FALSE(modeOn());
+    run(false, 1200, 1);                                   // mode off: both values zeroed
+    run(true, 1250, 50);                                   // fresh entry captures 1250
+    testFailsafeActive = true;
+    run(true, 1250, 1);
+    EXPECT_NEAR(thrPwm(), pwmFor(1250), 1.0f);
+}
+
+TEST_F(AltholdHoverThrottle, GpsRescueModeFlagBypassesDedicatedValueImmediately)
+{
+    run(true, 1400, 50);
+    EXPECT_NEAR(thrPwm(), pwmFor(1400), 1.0f);
+    flightModeFlags |= GPS_RESCUE_MODE;                    // before the flight mode update drops ALT_HOLD_MODE
+    updateAltHold(currentTimeUs);                          // Alt Hold task still runs once with ALT_HOLD_MODE set
+    EXPECT_NEAR(thrPwm(), pwmFor(1300), 1.0f);             // ap_hover_throttle
+    flightModeFlags &= ~GPS_RESCUE_MODE;
+    updateAltHold(currentTimeUs);
+    EXPECT_NEAR(thrPwm(), pwmFor(1400), 1.0f);
 }
 
 TEST_F(AltholdHoverThrottle, ZeroInheritsApHover)
 {
     altHoldConfigMutable()->hoverThrottle = 0;
+    altHoldInit();
     run(true, 1300, 50);
     EXPECT_NEAR(thrPwm(), pwmFor(1300), 1.0f);
 }

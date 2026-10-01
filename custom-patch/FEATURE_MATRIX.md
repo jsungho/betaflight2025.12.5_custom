@@ -1,6 +1,6 @@
 # 기체별 업로드 기능 정리표 (2025.12.5 보드별 슬림 빌드)
 
-대상 hex: [`firmware/2025.12.5/`](firmware/2025.12.5/) (10개, 보드별 빌드, `_v9_slim`) — 이 저장소의 유일한 배포 펌웨어다. 이전에 있던 통합 타겟(MCU 단위) hex(`firmware/v3/`)는 제거되었다.
+대상 hex: [`firmware/2025.12.5/`](firmware/2025.12.5/) (10개, 보드별 빌드, `_v10_slim`) — 이 저장소의 유일한 배포 펌웨어다. 이전에 있던 통합 타겟(MCU 단위) hex(`firmware/v3/`)는 제거되었다.
 
 **v4: 서보(USE_SERVOS)·배터리-컨티뉴(USE_BATTERY_CONTINUE)·아날로그 OSD(USE_OSD_SD/MAX7456) 전 기체 공통 제거, OSD는 디지털(MSP DisplayPort 등)만 유지.**
 **v5: Alt Hold 진입 스틱 래치(Entry Stick Latch) 추가 — `alt_hold_multirotor.c`. CLI 항목 없음(코드 고정), PG 버전 변경 없음. 전 기체 동일 적용. 자세한 동작은 [README.md](README.md) 3-2절, [BUILD_OPTIONS.md](BUILD_OPTIONS.md) 참고.**
@@ -8,25 +8,26 @@
 **v7: 해제 대기의 "호버 구간 건너뜀" 결함 수정(빠른 스틱 이동 시 위/아래 양방향 모두 해제) + 호스트 시뮬레이션 유닛테스트 13개 추가 — `alt_hold_multirotor.c`, `src/test/unit/althold_unittest.cc`. CLI 항목 없음(코드 고정), PG 버전 변경 없음. 전 기체 동일 적용.**
 **v8: Alt Hold 착륙 보조(Landing Assist) + OSD "ALTHOLD : LANDING" 표시 추가 — `alt_hold_multirotor.{c,h}`, `osd/osd_warnings.c`, `src/test/unit/althold_unittest.cc`(+10 테스트, 총 23개). Airmode OFF + Alt Hold + 시동 중, 고도 5m/2m 이하에서 `gps_rescue_descend_rate` 기반으로 수직 속도 상한을 낮추고(5.0m/5.5m, 1.8m/2.2m 히스테리시스), 페일세이프/GPS Rescue 자체 로직은 그대로 둔다. CLI 항목 없음(코드 고정), PG 버전 변경 없음. 전 기체 동일 적용(`USE_GPS_RESCUE` 필요, 10개 기체 전부 포함). 자세한 동작은 [README.md](README.md) 3-4절, [BUILD_OPTIONS.md](BUILD_OPTIONS.md) 참고.**
 **v9: `alt_hold_hover_throttle` 값 검증(허용값 0 또는 1100~1700, 범위 밖은 무시) + 이 값은 스위치로 켠 Alt Hold/Position Hold에서만 사용(페일세이프 착륙/GPS Rescue는 `ap_hover_throttle`) — `alt_hold_multirotor.c`, `althold_unittest.cc`(+5 테스트, 총 30개). CLI 항목 없음, PG 버전 변경 없음. 전 기체 동일 적용.**
+**v10: 호버 변수 분리 — `altHoldOverrideHoverPwm`(검증된 `alt_hold_hover_throttle`)와 `altHoldCapturedHoverPwm`(`ap_hover_throttle`=0일 때 진입 순간 스틱)을 따로 저장. 우선순위: 전용 값(조종자 스위치일 때만, 페일세이프/GPS Rescue 제외) > `ap_hover_throttle` > 진입 스틱 캡처값 > 기본값. `alt_hold_multirotor.c`, `althold_unittest.cc`(`AltholdHoverThrottle` 9개, 총 34개). CLI 항목 없음, PG 버전 변경 없음. 전 기체 동일 적용.**
 
 | 기체 | 보드(FC) | MCU | 자력계 | PINIO | LED 스트립 | 수신기 | 텔레메트리 | Alt/Pos Hold | 진입 래치 | 해제 대기 | 착륙 보조 | 서보 | 배터리-컨티뉴 | OSD | Flash |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| MARIO5 | SPEEDYBEEF405V4 | F405 | 포함 | 포함 | 제거 | CRSF | CRSF | 포함 | 포함 | 포함 | 포함 | 제거 | 제거 | 디지털만 | 39.42% |
-| AOS_UL7_O4 | SPEEDYBEEF405V4 | F405 | 포함 | 포함 | 제거 | FPort | SmartPort | 포함 | 포함 | 포함 | 포함 | 제거 | 제거 | 디지털만 | 39.20% |
+| MARIO5 | SPEEDYBEEF405V4 | F405 | 포함 | 포함 | 제거 | CRSF | CRSF | 포함 | 포함 | 포함 | 포함 | 제거 | 제거 | 디지털만 | 39.43% |
+| AOS_UL7_O4 | SPEEDYBEEF405V4 | F405 | 포함 | 포함 | 제거 | FPort | SmartPort | 포함 | 포함 | 포함 | 포함 | 제거 | 제거 | 디지털만 | 39.21% |
 | Mark4_6in | JHEF405PRO | F405 | 포함 | 제거 | 제거 | SBUS | 없음 | 포함 | 포함 | 포함 | 포함 | 제거 | 제거 | 디지털만 | 39.74% |
-| TJRC_10 | MATEKF722SE | F722 | 포함 | 포함 | 포함 | CRSF | CRSF | 포함 | 포함 | 포함 | 포함 | 제거 | 제거 | 디지털만 | 79.00% |
-| 8IN-KOPIS_X8 | SPEEDYBEEF7V3 | F722 | 포함 | 포함 | 제거 | CRSF | CRSF | 포함 | 포함 | 포함 | 포함 | 제거 | 제거 | 디지털만 | 76.47% |
-| CHIMERA7 | FLYWOOF722PROV2 | F722 | 포함 | 포함 | 제거 | CRSF | CRSF | 포함 | 포함 | 포함 | 포함 | 제거 | 제거 | 디지털만 | 74.19% |
-| AOS_UL7_X8 | MATEKF722HD | F722 | 포함 | 제거 | 포함 | CRSF | CRSF | 포함 | 포함 | 포함 | 포함 | 제거 | 제거 | 디지털만 | 76.77% |
-| Explorer LR4 | JHEF7DUAL | F722 | 포함 | 제거 | 포함 | CRSF | CRSF | 포함 | 포함 | 포함 | 포함 | 제거 | 제거 | 디지털만 | 76.83% |
-| **Pavo25 V2** | JHEF7DUAL | F722 | **제거 (센서 없음)** | 포함 | 제거 | CRSF | CRSF | 포함 | 포함 | 포함 | 포함 | 제거 | 제거 | 디지털만 | 73.63% |
+| TJRC_10 | MATEKF722SE | F722 | 포함 | 포함 | 포함 | CRSF | CRSF | 포함 | 포함 | 포함 | 포함 | 제거 | 제거 | 디지털만 | 79.01% |
+| 8IN-KOPIS_X8 | SPEEDYBEEF7V3 | F722 | 포함 | 포함 | 제거 | CRSF | CRSF | 포함 | 포함 | 포함 | 포함 | 제거 | 제거 | 디지털만 | 76.49% |
+| CHIMERA7 | FLYWOOF722PROV2 | F722 | 포함 | 포함 | 제거 | CRSF | CRSF | 포함 | 포함 | 포함 | 포함 | 제거 | 제거 | 디지털만 | 74.21% |
+| AOS_UL7_X8 | MATEKF722HD | F722 | 포함 | 제거 | 포함 | CRSF | CRSF | 포함 | 포함 | 포함 | 포함 | 제거 | 제거 | 디지털만 | 76.79% |
+| Explorer LR4 | JHEF7DUAL | F722 | 포함 | 제거 | 포함 | CRSF | CRSF | 포함 | 포함 | 포함 | 포함 | 제거 | 제거 | 디지털만 | 76.85% |
+| **Pavo25 V2** | JHEF7DUAL | F722 | **제거 (센서 없음)** | 포함 | 제거 | CRSF | CRSF | 포함 | 포함 | 포함 | 포함 | 제거 | 제거 | 디지털만 | 73.66% |
 | X8_5INCH | MATEKH743 | H743 | 포함 | 제거 | 포함 | FPort | SmartPort | 포함 | 포함 | 포함 | 포함 | 제거 | 제거 | 디지털만 | 24.38% |
 
 > **참고**: F722 기체(TJRC_10 ~ Pavo25 V2)는 512KB 플래시라 `TARGET_FLASH_SIZE >= 1024` 조건을 만족하지 못해 Alt Hold/Position Hold가 기본적으로 빠진다. 이 표의 F722 기체용 "Alt/Pos Hold 포함"은 빌드에서 `-DUSE_ALTITUDE_HOLD -DUSE_GPS -DUSE_POSITION_HOLD`로 명시적으로 켠 것이다. 자세한 근거는 [BUILD_OPTIONS.md](BUILD_OPTIONS.md)의 "F722에서 추가 옵션이 필요한 이유" 참고.
 
 ## 공통 사항 (전 기체)
 
-- 커스텀 CLI 4종 전부 포함: `alt_hold_deadband_low`, `alt_hold_full_low_is_max_descend`, `alt_hold_hover_throttle`(허용값 0 또는 1100~1700, 스위치 Alt Hold/Position Hold 전용), `landing_disarm_airmode_off_only`
+- 커스텀 CLI 4종 전부 포함: `alt_hold_deadband_low`, `alt_hold_full_low_is_max_descend`, `alt_hold_hover_throttle`(허용값 0 또는 1100~1700, 스위치 Alt Hold/Position Hold 전용, 페일세이프/GPS Rescue는 `ap_hover_throttle` > 진입 스틱 캡처값 > 기본값), `landing_disarm_airmode_off_only`
 - Alt Hold / Position Hold / GPS·GPS Rescue / MSP DisplayPort OSD(디지털) / 블랙박스 / ESC 센서 / BLHeli 4way: 전 기체 포함
 - **Alt Hold 진입 스틱 래치(Entry Stick Latch, v5)**: 전 기체 포함. Alt Hold 진입 순간 스로틀 스틱을 래치해 5%(PWM 50) 이상 움직이기 전까지 고도를 그대로 유지. CLI 항목 없음(코드 고정)
 - **Alt Hold 해제 대기(Exit Hold, v6/v7)**: 전 기체 포함. Alt Hold 스위치를 끈 순간에도 즉시 해제하지 않고, 스로틀 스틱이 `ap_hover_throttle` ±5%(PWM 50) 안에 들어오거나(v7: 빠른 스틱 이동으로 그 구간을 가로질러도) 해제. 대기 중에는 OSD 비행모드에 "ALT WAIT"(경고색)를 표시하고, 자세는 앵글 그대로·스로틀을 내려도 하강하지 않음(설계된 동작). CLI 항목 없음(코드 고정)

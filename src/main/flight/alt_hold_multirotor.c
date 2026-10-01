@@ -141,18 +141,50 @@ static uint16_t altHoldValidHoverThrottle(void)
     return (hover >= ALT_HOLD_HOVER_THROTTLE_VALID_MIN && hover <= ALT_HOLD_HOVER_THROTTLE_VALID_MAX) ? hover : 0;
 }
 
-// custom-patch: hover baseline for Alt Hold/Position Hold, evaluated at every use.
-// alt_hold_hover_throttle applies only to the pilot's own Alt Hold / Position Hold switch. Failsafe landing also runs
-// through ALT_HOLD_MODE, so while failsafeIsActive() it uses ap_hover_throttle like GPS Rescue does.
-// (This tree has no AUTOPILOT_MODE flight mode; if one is ever added it belongs in the same condition.)
+#define AP_HOVER_THROTTLE_DEFAULT 1275 // same as the ap_hover_throttle PG default (pg/autopilot_multirotor.c)
+
+// custom-patch: hover values are kept in two separate variables, both filled on Alt Hold entry and zeroed on exit
+//  - altHoldOverrideHoverPwm: validated alt_hold_hover_throttle (0 if unset or out of range). Only the pilot's own
+//    Alt Hold / Position Hold switch may use it.
+//  - altHoldCapturedHoverPwm: stock behaviour, the stick position at entry; only captured when ap_hover_throttle is 0.
+static uint16_t altHoldOverrideHoverPwm;
+static uint16_t altHoldCapturedHoverPwm;
+
+static void altHoldCaptureHoverThrottle(void)
+{
+    altHoldOverrideHoverPwm = altHoldValidHoverThrottle();
+    if (autopilotConfig()->hoverThrottle != 0) {
+        altHoldCapturedHoverPwm = 0;
+        return;     // no early return for the override: the stick capture below is always done when ap_hover_throttle is 0
+    }
+    altHoldCapturedHoverPwm = lrintf(constrainf(rcCommand[THROTTLE], autopilotConfig()->throttleMin, autopilotConfig()->throttleMax));
+}
+
+static void altHoldClearHoverThrottle(void)
+{
+    altHoldOverrideHoverPwm = 0;
+    altHoldCapturedHoverPwm = 0;
+}
+
+// custom-patch: hover baseline for Alt Hold/Position Hold, evaluated at every use. Priority:
+//  a) altHoldOverrideHoverPwm, only for the pilot's switch: not during failsafe landing (it also runs through
+//     ALT_HOLD_MODE) and not in GPS_RESCUE_MODE (excluded directly, so GPS Rescue never reads it in the cycle before
+//     the flight mode update drops ALT_HOLD_MODE); this tree has no AUTOPILOT_MODE flight mode
+//  b) ap_hover_throttle   c) stick captured on entry   d) default
+static float altHoldGetBaseHoverThrottle(void)
+{
+    if (autopilotConfig()->hoverThrottle != 0) {
+        return autopilotConfig()->hoverThrottle;
+    }
+    return altHoldCapturedHoverPwm != 0 ? altHoldCapturedHoverPwm : AP_HOVER_THROTTLE_DEFAULT;
+}
+
 static float altHoldGetHoverThrottle(void)
 {
-    const uint16_t altHoldHover = altHoldValidHoverThrottle();
-    const uint16_t apHover = autopilotConfig()->hoverThrottle;
-    if (altHoldHover != 0 && !failsafeIsActive()) {
-        return altHoldHover;
+    if (altHoldOverrideHoverPwm != 0 && !failsafeIsActive() && !FLIGHT_MODE(GPS_RESCUE_MODE)) {
+        return altHoldOverrideHoverPwm;
     }
-    return apHover != 0 ? (float)apHover : (float)altHoldHover;
+    return altHoldGetBaseHoverThrottle();
 }
 
 void altHoldInit(void)
@@ -162,6 +194,7 @@ void altHoldInit(void)
     altHoldLandingNearLatched = false;
     altHold.exitPending = false;
     altHold.prevSwitchOn = false;
+    altHoldClearHoverThrottle();
     altHold.deadband = altHoldConfig()->deadband / 100.0f;
     altHold.deadbandLow = altHoldConfig()->deadbandLow / 100.0f; // custom-patch: see betaflight/betaflight#15775
     altHold.allowStickAdjustment = altHoldConfig()->deadband;
@@ -178,12 +211,14 @@ static void altHoldProcessTransitions(void) {
             // custom-patch: hold altitude until the pilot moves the throttle stick 5% from where it is now
             altHold.entryThrottle = rcCommand[THROTTLE];
             altHold.entryLatched = true;
+            altHoldCaptureHoverThrottle();   // custom-patch: see altHoldGetHoverThrottle()
             altHold.isActive = true;
         }
     } else {
         altHold.isActive = false;
         altHoldLandingLatched = false;
         altHoldLandingNearLatched = false;
+        altHoldClearHoverThrottle();
     }
 
     // ** the transition out of alt hold (exiting altHold) may be rough.  Some notes... **
@@ -317,11 +352,12 @@ bool altHoldRequestActive(bool switchOn)
     }
 
     if (altHold.exitPending) {
-        // custom-patch: reference is ap_hover_throttle (autopilotConfig()->hoverThrottle), not
-        // alt_hold_hover_throttle/thr_mid; if ap_hover_throttle is 0, fall back to Alt Hold's own effective
-        // valid alt_hold_hover_throttle (1100..1700; out-of-range values count as 0)
+        // custom-patch: reference is ap_hover_throttle, not alt_hold_hover_throttle/thr_mid; if it is 0 fall back to
+        // the stick captured on entry, then the valid alt_hold_hover_throttle, then the default
         const uint16_t apHover = autopilotConfig()->hoverThrottle;
-        const float hoverPwm = apHover != 0 ? (float)apHover : (float)altHoldValidHoverThrottle();
+        const float hoverPwm = apHover != 0 ? (float)apHover
+            : altHoldCapturedHoverPwm != 0 ? (float)altHoldCapturedHoverPwm
+            : altHoldOverrideHoverPwm != 0 ? (float)altHoldOverrideHoverPwm : (float)AP_HOVER_THROTTLE_DEFAULT;
         const float prevDelta = altHold.exitPrevThrottle - hoverPwm;
         const float delta = rcCommand[THROTTLE] - hoverPwm;
         altHold.exitPrevThrottle = rcCommand[THROTTLE];
