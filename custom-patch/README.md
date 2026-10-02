@@ -102,7 +102,10 @@ save
 | `gps_rescue_disarm_threshold` | `60` | GPS Rescue 착지 판정 후 디스암 임계값(가속도 저크) |
 | `gps_rescue_use_mag` | `ON` | GPS Rescue 시 자력계 헤딩 사용(자력계 없는 Pavo25 V2는 해당 없음 — 아래 주 참고) |
 | `pos_hold_without_mag` | `OFF` | Position Hold를 자력계 없이 쓰는 것을 허용할지 여부. OFF = 자력계 필수(자력계 없는 기체는 Position Hold 시 안전을 위해 비활성) |
-| `landing_disarm_threshold` | `0` | EZ Disarm(착지 충격 자동 디스암) **비활성화**. 0이면 `useEzDisarm`이 꺼져 이 저장소가 추가한 `landing_disarm_airmode_off_only`도 사실상 동작하지 않는다(값을 올려야 EZ Disarm이 켜짐) |
+| `landing_disarm_threshold` | `45` | EZ Disarm(착지 충격 자동 디스암) 활성. 값이 낮을수록 민감(코드 주석 안전값 약 100). 프로파일별 값 |
+| `alt_hold_deadband_low` | `0` | Alt Hold 하강 쪽 데드밴드 없음 |
+| `alt_hold_full_low_is_max_descend` | `ON` | 스로틀이 min_check 미만이면 최대 하강 속도로 하강 |
+| `landing_disarm_airmode_off_only` | `ON` | airmode가 켜져 있으면 EZ Disarm 호출 안 함. 프로파일별 값 |
 
 ```
 set gps_ublox_flight_model = AIRBORNE_1G
@@ -114,15 +117,18 @@ set alt_hold_climb_rate = 70
 set gps_rescue_disarm_threshold = 60
 set gps_rescue_use_mag = ON
 set pos_hold_without_mag = OFF
-set landing_disarm_threshold = 0
+set landing_disarm_threshold = 45
 set gps_rescue_descend_rate = 135
 set alt_hold_deadband = 25
+set alt_hold_deadband_low = 0
+set alt_hold_full_low_is_max_descend = ON
 set alt_hold_hover_throttle = 1400
+set landing_disarm_airmode_off_only = ON
 save
 ```
 
 - **자력계가 없는 Pavo25 V2**는 `gps_rescue_use_mag = ON`이어도 자력계 자체가 없어 실질적으로 무자력계 헤딩 추정으로 동작한다(`pos_hold_without_mag`가 Position Hold에 별도로 적용됨). 벤치에서 헤딩 추정 정확도를 먼저 확인한다.
-- `landing_disarm_threshold = 0`을 기본값으로 둘 경우 3절의 `landing_disarm_airmode_off_only`는 켜 두어도 실제 디스암 트리거 자체가 없어 영향이 없다. EZ Disarm을 쓰려면 `landing_disarm_threshold`를 0보다 크게(예: 50) 설정해야 한다.
+- `landing_disarm_threshold`(45)와 `landing_disarm_airmode_off_only`(ON)는 PID 프로파일 값이므로 비행에 쓰는 프로파일마다 적용한다. airmode ON이면 EZ Disarm이 호출되지 않고 airmode OFF 착륙 때만 작동한다(2026-10-02 사용자 확정).
 - `mixer_type = EZLANDING`은 6절 주의사항의 Alt Hold 하강 제동 상호작용과 함께 벤치에서 확인한다.
 
 ## 3-2. Alt Hold 진입 스틱 래치 (Entry Stick Latch, v5)
