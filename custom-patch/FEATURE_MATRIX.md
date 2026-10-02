@@ -1,5 +1,7 @@
 # 기체별 업로드 기능 정리표 (2025.12.5 보드별 슬림 빌드)
 
+> 실기체 `diff all` 백업 기준 최종 CLI 값과 불일치 사항은 [AIRCRAFT_SPECS.md](AIRCRAFT_SPECS.md) 참고. 아래 "자력계 포함"은 빌드에 드라이버가 포함됐다는 뜻이며, 실기체 6기는 `mag_hardware = NONE`으로 설정되어 있음.
+
 대상 hex: [`firmware/2025.12.5/`](firmware/2025.12.5/) (10개, 보드별 빌드, `_v10_slim`) — 이 저장소의 유일한 배포 펌웨어다. 이전에 있던 통합 타겟(MCU 단위) hex(`firmware/v3/`)는 제거되었다.
 
 **v4: 서보(USE_SERVOS)·배터리-컨티뉴(USE_BATTERY_CONTINUE)·아날로그 OSD(USE_OSD_SD/MAX7456) 전 기체 공통 제거, OSD는 디지털(MSP DisplayPort 등)만 유지.**
