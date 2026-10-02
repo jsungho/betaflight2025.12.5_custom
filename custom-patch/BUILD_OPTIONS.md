@@ -367,3 +367,7 @@ custom-patch/build_custom.sh MATEKF722SE JHEF7DUAL
 - 컴파일·링크·심볼 확인까지만 했고 기체 부팅과 비행은 검증하지 않았다. 프롭 제거 벤치 테스트를 먼저 한다.
 - **해제 대기(v6/v7) 중에는 `ALT_HOLD_MODE`가 계속 켜진 상태다.** 즉 자세 제어는 앵글(자동 수평) 그대로이고, 대기 중 스로틀 스틱을 내려도 고도가 내려가지 않는다(목표 고도를 그대로 유지) — 설계된 동작이므로 놀라지 말 것. 스틱이 `ap_hover_throttle` ±5% 안에 들어오거나 그 값을 가로질러야 해제된다.
 - **착륙 보조(v8) 적용 중에는 `alt_hold_climb_rate`를 높게 설정해도 지면 근처(5m/2m 이하)에서는 `gps_rescue_descend_rate` 기반 값으로 속도가 자동으로 낮아진다.** Airmode를 끈 상태의 Alt Hold에서만 적용되며, 페일세이프 자동 착륙과 GPS Rescue 자체 하강 속도에는 영향이 없다.
+
+## GitHub Actions 검증 (`.github/workflows/custom-build.yml`)
+
+`custom-patch/**` 브랜치에 push하면(또는 수동 실행) 자동으로 다음을 확인한다: ① 호스트 유닛테스트(althold) ② 10개 기체 hex 빌드(기체별 병렬) ③ 컴파일 경고 수, 플래시/RAM 사용량 ④ hex 안의 커스텀 문자열 6종(`custom-patch/ci/check_hex.py`) ⑤ 저장소 `SHA256SUMS.txt`와 비교(참고용 — 커밋된 hex는 apt gcc 13.2.1, Actions는 프로젝트 지정 툴체인이라 달라도 실패 아님) ⑥ hex를 산출물(artifact)로 업로드. 컴파일·로직·문자열 점검일 뿐 **비행 동작은 검증하지 않는다.**

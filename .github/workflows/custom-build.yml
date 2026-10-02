@@ -1,0 +1,97 @@
+# Custom build verification for the personal fork (Betaflight 2025.12.5 custom patch).
+# Builds the 10 airframe-specific slim hex files, runs the host unit tests and checks the hex contents.
+# This only verifies compile/link, host unit tests and string presence. It does NOT verify flight behavior.
+name: Custom Build
+
+on:
+  push:
+    branches: [ "custom-patch/**" ]
+    paths-ignore:
+      - "**.md"
+      - "custom-patch/*.pdf"
+  workflow_dispatch:
+
+concurrency:
+  group: custom-build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  unit-test:
+    name: Host unit tests (althold)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Run althold unit tests
+        run: |
+          cd src/test
+          make test_althold_unittest 2>&1 | tee ../../unittest.log
+          grep -q "PASS" ../../unittest.log
+          echo "### Unit tests: althold PASS" >> "$GITHUB_STEP_SUMMARY"
+
+  build:
+    name: Build ${{ matrix.label }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        label: [MARIO5, AOSUL7O4, MARK4_6IN, TJRC10, 8INKOPISX8, CHIMERA7, AOSUL7X8, EXPLORERLR4, PAVO25V2, X8_5INCH]
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          submodules: recursive
+
+      - name: Cache build toolchain
+        uses: actions/cache@v4
+        id: cache-toolchain
+        with:
+          path: tools
+          key: ${{ runner.os }}-${{ hashFiles('mk/tools.mk') }}
+
+      - name: Install toolchain
+        if: steps.cache-toolchain.outputs.cache-hit != 'true'
+        run: make arm_sdk_install
+
+      - name: Hydrate board configs
+        run: make configs
+
+      - name: Build hex
+        run: |
+          mkdir -p out
+          OUT="$PWD/out" custom-patch/build_custom.sh "${{ matrix.label }}" 2>&1 | tee build.log
+          ls -l out/*.hex
+
+      - name: Check warnings
+        run: |
+          W=$(grep -c "warning:" build.log || true)
+          echo "compiler warnings: $W"
+          echo "### ${{ matrix.label }}: compiler warnings = $W" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Flash / RAM usage
+        run: |
+          echo "### ${{ matrix.label }} memory usage" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          grep -E "^\s*(FLASH|FLASH1|FLASH_CONFIG|RAM|SYSTEM_RAM|FAST_RAM|ITCM_RAM|DTCM_RAM|RAM_D1)[A-Z0-9_]*:|Memory region" build.log >> "$GITHUB_STEP_SUMMARY" || true
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Check custom strings in hex
+        run: python3 custom-patch/ci/check_hex.py "out/*.hex"
+
+      - name: Compare with committed SHA256 (informational)
+        run: |
+          # The committed hex files were built with a different arm-none-eabi-gcc (13.2.1) than the project
+          # toolchain downloaded here, so a mismatch is expected and is NOT a failure.
+          cd out
+          for f in *.hex; do
+            built=$(sha256sum "$f" | cut -d' ' -f1)
+            ref=$(grep " $f\$" ../custom-patch/firmware/2025.12.5/SHA256SUMS.txt | cut -d' ' -f1 || true)
+            if [ "$built" = "$ref" ]; then r="MATCH"; else r="DIFFERENT (toolchain/compiler version dependent)"; fi
+            echo "$f: $r"
+            echo "- $f: $r" >> "$GITHUB_STEP_SUMMARY"
+          done
+
+      - name: Upload hex
+        uses: actions/upload-artifact@v4
+        with:
+          name: hex-${{ matrix.label }}
+          path: out/*.hex
+          retention-days: 30
