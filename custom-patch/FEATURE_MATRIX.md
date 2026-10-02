@@ -32,7 +32,7 @@
 - 커스텀 CLI 4종 전부 포함: `alt_hold_deadband_low`, `alt_hold_full_low_is_max_descend`, `alt_hold_hover_throttle`(허용값 0 또는 1100~1700, 스위치 Alt Hold/Position Hold 전용, 페일세이프/GPS Rescue는 `ap_hover_throttle` > 진입 스틱 캡처값 > 기본값), `landing_disarm_airmode_off_only`
 - Alt Hold / Position Hold / GPS·GPS Rescue / MSP DisplayPort OSD(디지털) / 블랙박스 / ESC 센서 / BLHeli 4way: 전 기체 포함
 - **Alt Hold 진입 스틱 래치(Entry Stick Latch, v5)**: 전 기체 포함. Alt Hold 진입 순간 스로틀 스틱을 래치해 5%(PWM 50) 이상 움직이기 전까지 고도를 그대로 유지. CLI 항목 없음(코드 고정)
-- **Alt Hold 해제 대기(Exit Hold, v6/v7)**: 전 기체 포함. Alt Hold 스위치를 끈 순간에도 즉시 해제하지 않고, 스로틀 스틱이 `ap_hover_throttle` ±5%(PWM 50) 안에 들어오거나(v7: 빠른 스틱 이동으로 그 구간을 가로질러도) 해제. 대기 중에는 OSD 비행모드에 "ALT WAIT"(경고색)를 표시하고, 자세는 앵글 그대로·스로틀을 내려도 하강하지 않음(설계된 동작). CLI 항목 없음(코드 고정)
+- **Alt Hold 해제 대기(Exit Hold, v6/v7)**: 전 기체 포함. Alt Hold 스위치를 끈 순간에도 즉시 해제하지 않고, 스로틀 스틱이 `ap_hover_throttle` ±5%(PWM 50) 안에 들어오거나(v7: 빠른 스틱 이동으로 그 구간을 가로질러도) 해제. 대기 중에는 OSD 경고창에 "ALT WAIT"(경고색, 깜박임, v11부터)를 표시하고, 자세는 앵글 그대로·스로틀을 내려도 하강하지 않음(설계된 동작). CLI 항목 없음(코드 고정)
 - **Alt Hold 착륙 보조(Landing Assist, v8)**: 전 기체 포함. Alt Hold + Airmode OFF + 시동 중, 고도 5m/2m 이하에서 수직 속도 상한을 `gps_rescue_descend_rate × 2`/`× 1`로 낮추고(5.0m/5.5m, 1.8m/2.2m 히스테리시스), OSD에 "ALTHOLD : LANDING"(INFO)을 표시. 페일세이프/GPS Rescue 자체 로직은 영향 없음. CLI 항목 없음(코드 고정)
 - 제거(공통): VTX 제어, 트랜스폰더, 레인지파인더, SimonK, GPS 랩타이머·Plus Codes, 런치 컨트롤, **서보, 배터리-컨티뉴, 아날로그 OSD/MAX7456**(v4)
 

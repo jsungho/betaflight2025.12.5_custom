@@ -120,7 +120,7 @@ if (altHold.allowStickAdjustment && !altHold.entryLatched) {
 - 대기 중 스위치를 다시 켜면 대기를 취소하고 일반 Alt Hold로 복귀한다 — 이때 진입 스틱 래치(v5)가 새로 걸린다(현재 스틱 위치를 다시 `entryThrottle`로 저장).
 - 페일세이프/GPS Rescue 하강 오버라이드는 대기 상태와 무관하게 그대로 최우선 적용된다(기존 `failsafeIsActive()` 분기는 변경되지 않음).
 - `fc/core.c`의 Alt Hold 모드 판정에서 `IS_RC_MODE_ACTIVE(BOXALTHOLD)` 대신 `altHoldRequestActive(IS_RC_MODE_ACTIVE(BOXALTHOLD))`를 호출한다(매크로 `ALT_HOLD_SWITCH_REQUEST()`로 감싸 `USE_WING` 빌드에서는 기존 `IS_RC_MODE_ACTIVE(BOXALTHOLD)`를 그대로 씀). 모드가 꺼지는 `else` 분기(디스암, GPS Rescue 전환 등)에서는 `altHoldClearExitPending()`으로 대기를 지운다.
-- OSD 비행모드 요소(`osdElementFlymode`)에서 대기 중이면 `"ALT WAIT"`를 경고색(`DISPLAYPORT_SEVERITY_WARNING`)으로 표시한다. 우선순위는 `!FS!` → `RESC` → `HEAD` → `PASS` → **`ALT WAIT`** → `POSH` → `ALTH` 순서(FAILSAFE/RESCUE/HEADFREE/PASSTHRU 다음, POSH보다 앞).
+- (v11부터 경고창으로 이동) 대기 중이면 OSD 경고 요소(`renderOsdWarning`)에 `"ALT WAIT"`를 경고색·깜박임으로 표시한다. 비행모드 요소에는 더 이상 표시하지 않는다(대기 중에는 `ALTH`). 자세한 내용은 v11 절 참고.
 - 5%는 코드에 고정(`ALT_HOLD_EXIT_HOVER_BAND_PWM`)했다 — CLI 항목 없음, PG 버전 변경 없음. Position Hold는 변경하지 않았다.
 
 **이식 시 구조 차이**: 2026.6.2는 `autopilotGetEffectiveHoverThrottlePwm()`(2026.6.2 전용 함수)을 폴백으로 썼지만, 2025.12.5에는 이 함수가 없다. 대신 이 저장소가 v2에서 이미 계산해 쓰고 있는 `altHold.hoverThrottle`(`altHoldInit()`에서 `alt_hold_hover_throttle ? alt_hold_hover_throttle : ap_hover_throttle`로 결정됨)을 동일한 역할의 폴백으로 사용했다 — `ap_hover_throttle`이 0일 때만 쓰이므로 사용자가 지정한 "Alt Hold의 실효 호버 값" 요구사항과 일치한다. `fc/core.c`는 2026.6.2의 `processRxModes()`에 있는 `AUTOPILOT_MODE`/`flightPlanNavIsRescueDescentActive()` 조건이 2025.12.5에는 없어(해당 기능 자체가 없음) 그 부분은 제외하고 `IS_RC_MODE_ACTIVE(BOXALTHOLD)` → `ALT_HOLD_SWITCH_REQUEST()` 치환만 반영했다.
@@ -371,3 +371,15 @@ custom-patch/build_custom.sh MATEKF722SE JHEF7DUAL
 ## GitHub Actions 검증 (`.github/workflows/custom-build.yml`)
 
 `custom-patch/**` 브랜치에 push하면(또는 수동 실행) 자동으로 다음을 확인한다: ① 호스트 유닛테스트(althold) ② 10개 기체 hex 빌드(기체별 병렬) ③ 컴파일 경고 수, 플래시/RAM 사용량 ④ hex 안의 커스텀 문자열 6종(`custom-patch/ci/check_hex.py`) ⑤ 저장소 `SHA256SUMS.txt`와 비교(참고용 — 커밋된 hex는 apt gcc 13.2.1, Actions는 프로젝트 지정 툴체인이라 달라도 실패 아님) ⑥ hex를 산출물(artifact)로 업로드. 컴파일·로직·문자열 점검일 뿐 **비행 동작은 검증하지 않는다.**
+
+## v11 (2026-10-03): OSD "ALT WAIT" 표시를 비행모드 요소에서 경고창으로 이동 (CLI 파라미터 아님)
+
+**배경**: v6에서 `osdElementFlymode()`에 넣은 `"ALT WAIT"`(8글자)가 4글자용 비행모드 요소(ALTH/POSH 등) 폭을 넘어 옆 OSD 요소와 겹쳐 읽기 어려웠다(사용자 실기 확인).
+
+**변경**:
+- `src/main/osd/osd_elements.c`: `osdElementFlymode()`에서 `isAltHoldExitPending()` 분기 삭제. 해제 대기 중에도 `ALT_HOLD_MODE`가 켜져 있으므로 비행모드 칸은 `ALTH`로 표시된다.
+- `src/main/osd/osd_warnings.c`: `renderOsdWarning()`에 `isAltHoldExitPending()` 블록 추가(`#if defined(USE_ALTITUDE_HOLD) && !defined(USE_WING)`). `"ALT WAIT"`, `DISPLAYPORT_SEVERITY_WARNING`, 깜박임. 위치는 `POSHOLD FAIL` 다음, `HEADFREE`/코어온도/배터리 경고보다 앞(대기 중에는 스로틀로 고도가 바뀌지 않으므로 우선 표시). `FAIL SAFE`/RSSI/`LAND NOW`/`RESCUE N/A` 등 더 앞선 경고가 있으면 그 경고가 표시된다.
+- 경고 on/off 비트를 새로 만들지 않았다(PG 버전 변경 없음). OSD 프로파일에서 경고(`OSD_WARNINGS`) 요소가 켜져 있어야 보인다.
+- `custom-patch/build_custom.sh` 접미사 `custom_v10_slim` → `custom_v11_slim`.
+
+**검증**: 전 기체(10대) slim 재빌드 성공, 경고/오류 없음, 플래시 사용률 F405 39.2~39.7%, F722 73.7~79.0%, H743 24.4%. 10개 hex 모두에 `"ALT WAIT"`, `"ALTHOLD : LANDING"`, `alt_hold_hover_throttle` 문자열 포함. 호스트 유닛테스트 `osd_unittest` 21개, `althold_unittest` 34개 통과. 기체 비행/벤치 시험은 하지 않았다(프롭 제거 벤치에서 Alt Hold 스위치 ON→OFF 후 경고창에 `ALT WAIT`가 뜨고, 비행모드 칸은 `ALTH`인지 확인 필요).

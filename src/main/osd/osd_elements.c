@@ -1104,12 +1104,8 @@ static void osdElementFlymode(osdElementParms_t *element)
         strcpy(element->buff, "HEAD");
     } else if (FLIGHT_MODE(PASSTHRU_MODE)) {
         strcpy(element->buff, "PASS");
-#if defined(USE_ALTITUDE_HOLD) && !defined(USE_WING)
-    } else if (isAltHoldExitPending()) {
-        // custom-patch: Alt Hold switch is off, altitude still held until the throttle stick reaches hover
-        strcpy(element->buff, "ALT WAIT");
-        element->attr = DISPLAYPORT_SEVERITY_WARNING;
-#endif
+    // custom-patch: the Alt Hold exit-hold ("ALT WAIT") indication moved to the OSD warnings element
+    // (osd_warnings.c); this 4-character element must not carry an 8-character string.
     } else if (FLIGHT_MODE(POS_HOLD_MODE)) {
         strcpy(element->buff, "POSH");
     } else if (FLIGHT_MODE(ALT_HOLD_MODE)) {

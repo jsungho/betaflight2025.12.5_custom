@@ -379,6 +379,18 @@ void renderOsdWarning(char *warningText, bool *blinking, uint8_t *displayAttr)
     }
 #endif
 
+#if defined(USE_ALTITUDE_HOLD) && !defined(USE_WING)
+    // custom-patch: Alt Hold switch is off but altitude is still held until the throttle stick reaches hover.
+    // Shown in the warnings element (not the 4-char flight mode element); placed above battery warnings because
+    // the throttle stick does not change altitude while waiting.
+    if (isAltHoldExitPending()) {
+        tfp_sprintf(warningText, "ALT WAIT");
+        *displayAttr = DISPLAYPORT_SEVERITY_WARNING;
+        *blinking = true;
+        return;
+    }
+#endif
+
     // Show warning if in HEADFREE flight mode
     if (FLIGHT_MODE(HEADFREE_MODE)) {
         tfp_sprintf(warningText, "HEADFREE");
