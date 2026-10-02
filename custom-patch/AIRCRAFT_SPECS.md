@@ -12,7 +12,7 @@
 | 2 | **Pavo25 V2는 4.5.5 유지 (사용자 확인)** (MSP API 1.46) | 커스텀 기능(alt_hold, landing_disarm, ap_*, 자력계) 없음. 구형 `gps_rescue_throttle_*` 파라미터 사용 |
 | 3 | ~~Mark4_6in 미제출~~ → **해결(2026-10-03)**: 2025.12.5 v10 커스텀 백업 반영 | 10기 중 9기가 2025.12.5 커스텀, Pavo25 V2만 4.5.5 |
 | 4 | **자력계 OFF는 의도된 운용 값 (사용자 확인 2026-10-03)**: 배터리 장착 등의 이슈로 자력계를 껐음. AOS_UL7_O4, AOS_UL7_X8, EXPLORER_LR4, 8IN-KOPIS_X8, MARIO5, TJRC_10, X8_5INCH 7기는 `mag_hardware = NONE`, `gps_rescue_use_mag = OFF`, `pos_hold_without_mag = ON` | 권장 CLI(`gps_rescue_use_mag ON`, `pos_hold_without_mag OFF`)와 다르지만 기체 운용 값이 우선. FEATURE_MATRIX의 "자력계 포함"은 빌드에 드라이버가 들어있다는 뜻 |
-| 5 | CHIMERA7만 mag 관련 줄이 없음(기본값 사용) | |
+| 5 | CHIMERA7, Mark4_6in은 mag_hardware 등 mag 관련 줄이 없음(자력계 기본 사용) | |
 
 ## 1. 공통 값 (2025.12.5 커스텀, 9기 공통)
 
