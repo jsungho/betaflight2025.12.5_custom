@@ -21,6 +21,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
+      - name: Install test dependencies
+        run: sudo apt-get update && sudo apt-get install -y clang libblocksruntime-dev
+
       - name: Run althold unit tests
         run: |
           cd src/test
