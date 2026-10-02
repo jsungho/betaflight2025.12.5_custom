@@ -24,9 +24,28 @@ jobs:
       - name: Run althold unit tests
         run: |
           cd src/test
-          make test_althold_unittest 2>&1 | tee ../../unittest.log
-          grep -q "PASS" ../../unittest.log
-          echo "### Unit tests: althold PASS" >> "$GITHUB_STEP_SUMMARY"
+          set +e
+          make test_althold_unittest > ../../unittest.log 2>&1
+          rc=$?
+          set -e
+          tail -n 40 ../../unittest.log
+          {
+            echo "### Host unit tests (althold): make exit code = $rc"
+            echo '```'
+            grep -E "tests from .* ran|PASSED|FAILED|running test" ../../unittest.log || true
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          if [ $rc -ne 0 ]; then
+            echo "::error title=unit test failed::$(tail -n 15 ../../unittest.log | tr '\n' ' ' | cut -c1-900)"
+          fi
+          exit $rc
+
+      - name: Upload unit test log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: unittest-log
+          path: unittest.log
 
   build:
     name: Build ${{ matrix.label }}
