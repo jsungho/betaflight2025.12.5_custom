@@ -1,0 +1,37 @@
+name: Custom Release
+
+# Publishes the per-airframe HEX files built by Custom Build run #3 as a GitHub Release.
+on:
+  push:
+    branches: [custom-patch/alt-hold-throttle-range]
+    paths: [.github/workflows/custom-release.yml]
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    env:
+      TAG: v2025.12.5-custom-v10
+      SOURCE_RUN_ID: "37020678078"
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: hex-*
+          merge-multiple: true
+          path: hex
+          run-id: ${{ env.SOURCE_RUN_ID }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+      - name: List files
+        run: ls -la hex
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "$TAG" hex/*.hex \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$GITHUB_SHA" \
+            --title "$TAG" \
+            --notes "Betaflight 2025.12.5 custom build v10 (slim). Per-airframe HEX files; flash only the file for your airframe."
