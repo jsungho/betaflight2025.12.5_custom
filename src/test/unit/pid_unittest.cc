@@ -113,6 +113,9 @@ extern "C" {
     }
     void beeperConfirmationBeeps(uint8_t) { }
     bool isLaunchControlActive(void) {return unitLaunchControlActive; }
+    // custom-patch: pid.c reads isAirmodeEnabled() for landing_disarm_airmode_off_only
+    bool simulatedAirmodeEnabled = true;
+    bool isAirmodeEnabled(void) { return simulatedAirmodeEnabled; }
     void disarm(flightLogDisarmReason_e) { }
     float getMaxRcRate(int axis)
     {
