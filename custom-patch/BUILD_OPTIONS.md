@@ -4,7 +4,7 @@
 커스텀 패치(4종): `alt_hold_full_low_is_max_descend`, `alt_hold_deadband_low`, `alt_hold_hover_throttle`, `landing_disarm_airmode_off_only` (참고: betaflight/betaflight#15775)
 
 이 저장소의 펌웨어는 **보드별(`make <보드이름>`)** 로 빌드해서, 그 보드/기체가 실제로 쓰지 않는 기능을 빼 플래시 사용량을 줄였다(이전에 있던 통합 타겟(MCU 단위) hex는 제거되었다).
-결과 파일은 기체 이름이 들어간 hex(`..._custom_v13_slim.hex`)이며, **각 기체에 맞는 파일 하나만** 올려야 한다.
+결과 파일은 기체 이름이 들어간 hex(`..._custom_v14_slim.hex`)이며, **각 기체에 맞는 파일 하나만** 올려야 한다.
 
 **v4: 서보(USE_SERVOS)와 배터리-컨티뉴(USE_BATTERY_CONTINUE)를 전 기체에서 제거했고, OSD는 디지털(MSP DisplayPort 등, `USE_OSD_HD`)만 남기고 아날로그 OSD(`USE_OSD_SD`)와 MAX7456 드라이버(`USE_MAX7456`)를 제거했다.** 사용자 지시(2026-09): 이 저장소의 기체는 전부 디지털 VTX(Walksnail 등)만 쓰고 서보/아날로그 OSD를 쓰지 않음.
 
@@ -343,7 +343,7 @@ custom-patch/build_custom.sh
 custom-patch/build_custom.sh MATEKF722SE JHEF7DUAL
 ```
 
-결과는 `custom-patch/firmware/2025.12.5/`에 `betaflight_2025.12.5_<MCU>_<보드>_<기체>_custom_v13_slim.hex` 형식으로 생성된다.
+결과는 `custom-patch/firmware/2025.12.5/`에 `betaflight_2025.12.5_<MCU>_<보드>_<기체>_custom_v14_slim.hex` 형식으로 생성된다.
 
 ## 검증한 내용
 
@@ -408,3 +408,18 @@ GPT 교차 검증의 6건을 코드와 대조해 5건을 수정하고 1건은 �
 추가로 GPT가 짚은 테스트 공백(`osd_unittest`에 `USE_ALTITUDE_HOLD` 없음 → ALT WAIT 경고 분기 미검증, Alt Hold 테스트가 믹서·`throttle_limit`을 포함하지 않음)은 이번에 다루지 않았다.
 
 **검증**: `althold_unittest` 41개 통과. 신규 4개(같은 프레임 스위치 OFF+스로틀 하강 시 해제 안 됨, 새 프레임이 호버면 해제, 고도 유지 중 목표 보존, 착륙 상한이 climb_rate 초과 안 함)는 수정 전 코드에서 모두 실패함을 확인. 전 기체 10대 `_v13_slim` 재빌드 성공(경고/오류 없음, F405 39.3~39.8%, F722 73.7~79.1%, H743 24.4%), hex 6종 문자열 포함. 비행 시험은 하지 않았다.
+
+## v14 (2026-10-04): RC 스무딩과 입력 기준 정리 — 교차 검증 2차 (CLI 파라미터 아님)
+
+ChatGPT 2차 검증의 2건을 코드와 대조했다.
+
+| # | 지적 | 판정 | 조치 |
+|---|---|---|---|
+| 1 | v13의 `getRcCommandThrottleFromRcData()`는 RC 스무딩 필터를 거치지 않는데, 실제 `rcCommand[THROTTLE]`은 PID 루프에서 스무딩 필터 출력으로 덮어써져 믹서와 Alt Hold 스틱 판정에 쓰임. (a) 해제 대기가 실제 출력보다 먼저 끝나 순간 저하 가능, (b) 재진입 래치가 저절로 풀릴 수 있음 | **타당(스무딩 ON, 기본값에서 발생). v13이 만든 기준 혼용** | (a) 해제 판정: 스무딩 ON이면 `rcCommand[THROTTLE]`(믹서가 해제 직후 쓰는 필터 출력), OFF이면 최신 프레임 값. (b) 진입 래치: 캡처(최초·재진입)와 비교를 모두 같은 `rcData` 기준 값으로 통일 |
+| 2 | README의 `ap_hover_throttle=0` 설명이 CLI 범위(1100~1700)와 맞지 않고, "진입 순간 호버 캡처가 없다"는 옛 문장이 남아 있음 | **확인됨(문서 문제)** | README 3-5절 정정: CLI로는 0 설정 불가, 0일 때 캡처는 CLI 밖 경로를 위한 방어용 폴백. 모순 문장 수정 |
+
+재분석 메모: 스무딩 ON에서는 v12 이전 방식(필터 출력 `rcCommand` 기준)이 해제 시 출력 연속성은 오히려 맞았고, v13이 필터 전 값으로 바꾸며 어긋났다. 반대로 스무딩 OFF에서는 `processRxModes()` 시점의 `rcCommand`가 이전 프레임이라 v13의 최신 프레임 값이 맞다. v14는 둘 다 만족하도록 스무딩 설정에 따라 기준을 고른다.
+
+**검증**: `althold_unittest` 44개 통과. 신규 3개(스무딩 ON: 해제 대기 중 필터 출력이 호버에 닿을 때까지 유지, 스위치 OFF+스로틀 하강 시 연속 해제, 재진입 래치가 필터 수렴만으로 풀리지 않음)는 v13 코드에서 모두 실패함을 확인. 기존 v13 테스트는 스무딩 OFF를 명시. 전 기체 10대 `_v14_slim` 재빌드 성공(경고/오류 없음, F405 39.3~39.8%, F722 73.7~79.1%, H743 24.4%), hex 6종 문자열 포함, `SHA256SUMS.txt` v14로 갱신.
+
+**한계**: 유닛테스트의 `getRcCommandThrottleFromRcData()`는 실제 `rc.c`가 아닌 대체 함수이고 스무딩 필터 자체는 모사하지 않는다(필터 출력을 `rcCommand` 값으로 직접 지정). 실제 필터 지연 크기는 `rc_smoothing_*` 설정에 따르며 실기체/블랙박스로 확인하지 않았다.

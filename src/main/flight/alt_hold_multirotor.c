@@ -124,6 +124,27 @@ static float altHoldMaxClimbRate(void)
     return altHold.maxVelocity;
 }
 
+// custom-patch (v14): which throttle value to compare against, depending on what the decision must stay continuous with.
+// rcCommand[THROTTLE] is the RC-smoothed value (pt3 filter output, refreshed in the PID loop) when rc_smoothing is ON,
+// and the plain per-frame value when it is OFF. The raw, newest-frame value comes from rcData (see rc.c) and is
+// what processRxModes()-time decisions (which run before updateRcCommands()) need to see.
+//
+// Entry latch: capture and compare on the SAME raw value, regardless of smoothing, so a stationary stick can never
+// look like movement just because the filter output is still catching up.
+static float altHoldRawThrottle(void)
+{
+    return getRcCommandThrottleFromRcData();
+}
+
+// Exit hold release: the mixer output after release is the value in rcCommand[THROTTLE]. With RC smoothing ON that is the
+// filter state (what the quad is actually being driven with), so release only when THAT is at hover, otherwise the
+// hand-over would dip while the filter still catches up with a fast stick move. With smoothing OFF rcCommand is the
+// previous frame at decision time, so use the newest frame instead.
+static float altHoldExitThrottle(void)
+{
+    return rxConfig()->rc_smoothing ? rcCommand[THROTTLE] : getRcCommandThrottleFromRcData();
+}
+
 static void altHoldReset(void)
 {
     resetAltitudeControl();
@@ -210,7 +231,7 @@ static void altHoldProcessTransitions(void) {
         if (!altHold.isActive) {
             altHoldReset();
             // custom-patch: hold altitude until the pilot moves the throttle stick 5% from where it is now
-            altHold.entryThrottle = rcCommand[THROTTLE];
+            altHold.entryThrottle = altHoldRawThrottle();   // v14: same reference as the latch comparison below
             altHold.entryLatched = true;
             altHoldCaptureHoverThrottle();   // custom-patch: see altHoldGetHoverThrottle()
             altHold.isActive = true;
@@ -244,7 +265,7 @@ static void altHoldUpdateTargetAltitude(void)
 
     // custom-patch: release the entry latch once the stick has moved 5% from its position on entry;
     // until then the stick is ignored and the target altitude holds
-    if (altHold.entryLatched && fabsf(rcCommand[THROTTLE] - altHold.entryThrottle) >= ALT_HOLD_ENTRY_LATCH_RELEASE_PWM) {
+    if (altHold.entryLatched && fabsf(altHoldRawThrottle() - altHold.entryThrottle) >= ALT_HOLD_ENTRY_LATCH_RELEASE_PWM) {
         altHold.entryLatched = false;
     }
 
@@ -352,7 +373,7 @@ bool altHoldRequestActive(bool switchOn)
         if (altHold.exitPending) {
             // switched back on while waiting: behave like a fresh entry, latch the stick where it is now
             altHold.exitPending = false;
-            altHold.entryThrottle = getRcCommandThrottleFromRcData();
+            altHold.entryThrottle = altHoldRawThrottle();
             altHold.entryLatched = true;
         }
         return true;
@@ -361,7 +382,7 @@ bool altHoldRequestActive(bool switchOn)
     if (wasSwitchOn && altHold.isActive) {
         // switch just turned off while Alt Hold was active: keep holding unless the stick is already at hover
         altHold.exitPending = true;
-        altHold.exitPrevThrottle = getRcCommandThrottleFromRcData();   // v13: new frame's value, see rc.c
+        altHold.exitPrevThrottle = altHoldExitThrottle();
     }
 
     if (altHold.exitPending) {
@@ -372,9 +393,9 @@ bool altHoldRequestActive(bool switchOn)
             : altHoldCapturedHoverPwm != 0 ? (float)altHoldCapturedHoverPwm
             : altHoldOverrideHoverPwm != 0 ? (float)altHoldOverrideHoverPwm : (float)AP_HOVER_THROTTLE_DEFAULT;
         const float prevDelta = altHold.exitPrevThrottle - hoverPwm;
-        // v13: this runs from processRxModes(), before updateRcCommands() refreshes rcCommand[THROTTLE]; judge the
-        // release on the newest rcData-derived throttle so we never release on the old value and then go manual on the new one
-        const float throttleNow = getRcCommandThrottleFromRcData();
+        // v13/v14: this runs from processRxModes(), before updateRcCommands() refreshes rcCommand[THROTTLE]; judge the
+        // release on the value the manual throttle will actually use right after release (see altHoldExitThrottle())
+        const float throttleNow = altHoldExitThrottle();
         const float delta = throttleNow - hoverPwm;
         altHold.exitPrevThrottle = throttleNow;
         // custom-patch: release when the stick is inside the band, or has crossed hover since the last sample

@@ -154,6 +154,7 @@ protected:
         altHoldConfigMutable()->fullLowIsMaxDescend = true;
         altHoldConfigMutable()->climbRate = 70;
         rxConfigMutable()->mincheck = 1050;
+        rxConfigMutable()->rc_smoothing = false;          // tests opt in to RC smoothing ON explicitly
         autopilotInit();
         altHoldInit();
         altHoldClearExitPending();
@@ -431,6 +432,7 @@ TEST_F(AltholdHoverThrottle, ZeroInheritsApHover)
 // v13: switch off + stick drop in the same RX frame must not release on the previous frame's stick value
 TEST_F(AltholdCustomSim, ExitDecisionUsesNewFrameThrottleNotStaleRcCommand)
 {
+    rxConfigMutable()->rc_smoothing = false;           // plain per-frame rcCommand: manual output after release = new frame
     run(true, 1300, 50);                               // Alt Hold on, stick at ap_hover_throttle (1300)
     stepStale(false, 1300, 1000);                      // switch off AND stick to 1000 in the same frame
     EXPECT_TRUE(modeOn());                             // still holding (old stale 1300 would have released at once)
@@ -443,10 +445,54 @@ TEST_F(AltholdCustomSim, ExitDecisionUsesNewFrameThrottleNotStaleRcCommand)
 
 TEST_F(AltholdCustomSim, ExitDecisionReleasesWhenNewFrameIsAtHover)
 {
+    rxConfigMutable()->rc_smoothing = false;
     run(true, 1000 + 1, 1);                            // (entry value irrelevant)
     run(true, 1500, 50);
     stepStale(false, 1000, 1300);                      // stale value far from hover, new frame exactly at hover
     EXPECT_FALSE(modeOn());                            // released on the new value
+}
+
+// v14: RC smoothing ON. rcCommand[THROTTLE] is the filter output, which is also what the mixer uses after release.
+// Release must be judged on that value, not on the unfiltered newest frame.
+TEST_F(AltholdCustomSim, SmoothingOnExitWaitsForFilteredThrottleToReachHover)
+{
+    rxConfigMutable()->rc_smoothing = true;
+    run(true, 1300, 50);
+    run(false, 1000, 5);                               // ALT WAIT, stick low
+    EXPECT_TRUE(isAltHoldExitPending());
+    stepStale(false, 1000, 1300);                      // raw jumps to hover, filter output still at 1000
+    EXPECT_TRUE(modeOn());                             // not released: manual output would still be ~1000 (dip)
+    run(false, 1300, 1);                               // filter output has caught up
+    EXPECT_FALSE(modeOn());
+}
+
+TEST_F(AltholdCustomSim, SmoothingOnSwitchOffWithStickDropReleasesContinuously)
+{
+    rxConfigMutable()->rc_smoothing = true;
+    run(true, 1300, 50);
+    stepStale(false, 1300, 1000);                      // filter output still at hover: hand-over is continuous, then follows the stick
+    EXPECT_FALSE(modeOn());
+}
+
+// v14: entry latch capture and comparison use the same raw value, so a stationary stick never releases the latch
+TEST_F(AltholdCustomSim, ReentryLatchNotReleasedByFilterCatchUp)
+{
+    rxConfigMutable()->rc_smoothing = true;
+    run(true, 1300, 5);
+    run(true, 1600, 5);                                // latch released by real stick movement
+    run(false, 1600, 1);                               // switch off: ALT WAIT (stick far from hover)
+    EXPECT_TRUE(isAltHoldExitPending());
+    // switch back on while the stick is flicked to 1500: raw is 1500 but the filtered rcCommand still reads 1100
+    rcCommand[THROTTLE] = 1100;
+    testRcThrottleNow = 1500;
+    testThrottleStatus = THROTTLE_HIGH;
+    EXPECT_TRUE(altHoldRequestActive(true));
+    flightModeFlags |= ALT_HOLD_MODE;
+    for (int i = 0; i < 10; i++) {
+        updateAltHold(currentTimeUs);                  // stick stationary at raw 1500 while the filter catches up
+    }
+    EXPECT_NEAR(altHold.targetVelocity, 0.0f, 0.001f); // latch still holding: no climb/descend command
+    testRcThrottleNow = -1.0f;
 }
 
 #ifdef USE_GPS_RESCUE

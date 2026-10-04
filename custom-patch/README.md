@@ -20,7 +20,9 @@
 
 **v12: 착륙 보조 속도 상한 전환 시 목표 고도 고착 수정.** 착륙 보조가 상한을 낮출 때 기존 목표 선행량이 새 1초 문턱보다 크면 스틱이 목표 고도에 반영되지 않던 문제를 목표를 문턱 안으로 끌어당겨 해결. CLI 항목 없음.
 
-**v13(현재): 교차 검증(GPT) 지적 반영.** (1) 해제 대기 판정이 수신 처리 순서상 이전 프레임의 스로틀을 보던 문제: 스위치를 끄면서 스로틀을 내리면 이전 값(호버)으로 즉시 해제된 뒤 새 값으로 수동 전환될 수 있었다. 이제 같은 프레임의 최신 스로틀(`rcData` 기준)로 판단한다. (2) v12 목표 보정은 스틱이 목표를 움직이는 동안에만 적용(고도 유지·진입 래치·ALT WAIT 중에는 목표 보존). (3) 착륙 보조 속도 상한이 `alt_hold_climb_rate`보다 커지지 않게 제한(예: climb_rate 10이면 100 cm/s 초과 금지). CLI 항목 없음, PG 버전 변경 없음. 유닛테스트 41개.
+**v13: 교차 검증(GPT) 지적 반영.** (1) 해제 대기 판정이 수신 처리 순서상 이전 프레임의 스로틀을 보던 문제: 스위치를 끄면서 스로틀을 내리면 이전 값(호버)으로 즉시 해제된 뒤 새 값으로 수동 전환될 수 있었다. 이제 같은 프레임의 최신 스로틀(`rcData` 기준)로 판단한다. (2) v12 목표 보정은 스틱이 목표를 움직이는 동안에만 적용(고도 유지·진입 래치·ALT WAIT 중에는 목표 보존). (3) 착륙 보조 속도 상한이 `alt_hold_climb_rate`보다 커지지 않게 제한(예: climb_rate 10이면 100 cm/s 초과 금지). CLI 항목 없음, PG 버전 변경 없음. 유닛테스트 41개.
+
+**v14(현재): RC 스무딩과 입력 기준 정리(교차 검증 2차).** v13의 최신 프레임 스로틀(`rcData` 기준)은 RC 스무딩 필터를 거치지 않아, 스무딩 ON(기본)일 때 기준이 어긋났다. (1) 해제 대기 해제 판정: 스무딩 ON이면 믹서가 해제 직후 실제로 쓰는 필터 출력(`rcCommand[THROTTLE]`)이 호버에 들어왔을 때만 해제(빠른 스틱 조작 시 필터가 따라오는 동안의 순간 저하 방지), OFF이면 최신 프레임 값 사용. (2) 진입 래치: 캡처와 비교를 항상 같은 `rcData` 기준 값으로 통일해, 스틱을 가만히 둬도 필터가 따라오는 동안 래치가 저절로 풀리던 문제 제거. (3) 문서 정정: `ap_hover_throttle`은 CLI로 0 설정 불가(1100~1700) — 0일 때 캡처 동작은 방어용 폴백임을 명시. CLI 항목 없음, PG 버전 변경 없음. 유닛테스트 44개.
 
 - 브랜치: `custom-patch/alt-hold-throttle-range`
 - 참고 이슈: betaflight/betaflight#15775
@@ -34,16 +36,16 @@
 
 | 기체 | 파일 |
 |---|---|
-| MARIO5 (CRSF, PINIO 유지) | `betaflight_2025.12.5_STM32F405_SPEEDYBEEF405V4_MARIO5_custom_v13_slim.hex` |
-| AOS_UL7_O4 (FPort, LED 스트립 제거) | `betaflight_2025.12.5_STM32F405_SPEEDYBEEF405V4_AOSUL7O4_custom_v13_slim.hex` |
-| Mark4_6in | `betaflight_2025.12.5_STM32F405_JHEF405PRO_MARK4_6IN_custom_v13_slim.hex` |
-| TJRC_10 | `betaflight_2025.12.5_STM32F7X2_MATEKF722SE_TJRC10_custom_v13_slim.hex` |
-| 8IN-KOPIS_X8 | `betaflight_2025.12.5_STM32F7X2_SPEEDYBEEF7V3_8INKOPISX8_custom_v13_slim.hex` |
-| CHIMERA7 | `betaflight_2025.12.5_STM32F7X2_FLYWOOF722PROV2_CHIMERA7_custom_v13_slim.hex` |
-| AOS_UL7_X8 | `betaflight_2025.12.5_STM32F7X2_MATEKF722HD_AOSUL7X8_custom_v13_slim.hex` |
-| Explorer LR4 | `betaflight_2025.12.5_STM32F7X2_JHEF7DUAL_EXPLORERLR4_custom_v13_slim.hex` |
-| Pavo25 V2 (CRSF, PINIO, **자력계 없음**, LED 없음) | `betaflight_2025.12.5_STM32F7X2_JHEF7DUAL_PAVO25V2_custom_v13_slim.hex` |
-| X8_5INCH | `betaflight_2025.12.5_STM32H743_MATEKH743_X8_5INCH_custom_v13_slim.hex` |
+| MARIO5 (CRSF, PINIO 유지) | `betaflight_2025.12.5_STM32F405_SPEEDYBEEF405V4_MARIO5_custom_v14_slim.hex` |
+| AOS_UL7_O4 (FPort, LED 스트립 제거) | `betaflight_2025.12.5_STM32F405_SPEEDYBEEF405V4_AOSUL7O4_custom_v14_slim.hex` |
+| Mark4_6in | `betaflight_2025.12.5_STM32F405_JHEF405PRO_MARK4_6IN_custom_v14_slim.hex` |
+| TJRC_10 | `betaflight_2025.12.5_STM32F7X2_MATEKF722SE_TJRC10_custom_v14_slim.hex` |
+| 8IN-KOPIS_X8 | `betaflight_2025.12.5_STM32F7X2_SPEEDYBEEF7V3_8INKOPISX8_custom_v14_slim.hex` |
+| CHIMERA7 | `betaflight_2025.12.5_STM32F7X2_FLYWOOF722PROV2_CHIMERA7_custom_v14_slim.hex` |
+| AOS_UL7_X8 | `betaflight_2025.12.5_STM32F7X2_MATEKF722HD_AOSUL7X8_custom_v14_slim.hex` |
+| Explorer LR4 | `betaflight_2025.12.5_STM32F7X2_JHEF7DUAL_EXPLORERLR4_custom_v14_slim.hex` |
+| Pavo25 V2 (CRSF, PINIO, **자력계 없음**, LED 없음) | `betaflight_2025.12.5_STM32F7X2_JHEF7DUAL_PAVO25V2_custom_v14_slim.hex` |
+| X8_5INCH | `betaflight_2025.12.5_STM32H743_MATEKH743_X8_5INCH_custom_v14_slim.hex` |
 
 보드가 다르면 잘못된 hex다. MARIO5와 AOS_UL7_O4는 같은 FC(SPEEDYBEEF405V4), Pavo25 V2와 Explorer LR4는 같은 FC(JHEF7DUAL)라서 파일명 라벨(MARIO5 / AOSUL7O4 / PAVO25V2 / EXPLORERLR4)까지 확인해야 한다. 파일명의 보드 이름이 기체 FC와 같은지 확인한 뒤 Betaflight Configurator의 **Load Firmware [Local]**로 올린다.
 
@@ -216,14 +218,14 @@ CLI 파라미터가 아니라 코드에 고정된 동작이다(PG 버전 변경 
 | 허용값 | 0 또는 1100~1700 (경계 포함). CLI 범위는 0~1700 그대로 |
 | 범위 밖 값(예 1, 500, 1099, 1701) | 저장은 되지만 사용 시 0으로 간주 → `ap_hover_throttle` 사용 |
 | 0 | `ap_hover_throttle` 상속(기존 동작) |
-| 변수 분리(v10) | `altHoldOverrideHoverPwm`(검증된 전용 값) / `altHoldCapturedHoverPwm`(`ap_hover_throttle`=0일 때의 진입 스틱 값). 진입 시 채우고 종료/초기화 시 0 |
+| 변수 분리(v10) | `altHoldOverrideHoverPwm`(검증된 전용 값) / `altHoldCapturedHoverPwm`(`ap_hover_throttle`=0일 때의 진입 스틱 값). 진입 시 채우고 종료/초기화 시 0. **참고: `ap_hover_throttle`의 CLI 허용 범위는 1100~1700이라 CLI로는 0을 설정할 수 없다.** 0일 때의 캡처/폴백은 CLI 밖 경로(MSP 등)로 0이 저장된 경우를 위한 방어 코드이며 일반 운용에서는 쓰이지 않는다(기본값 1275). 표의 "0" 관련 설명은 이 내부 예외 처리를 가리킨다 |
 | 스위치로 켠 Alt Hold / Position Hold | 유효한 `alt_hold_hover_throttle`을 호버 기준(고도 제어 호버 + 스틱 데드밴드 중심)으로 사용 |
 | 페일세이프 착륙 | `failsafeIsActive()` 동안 `ap_hover_throttle` > 진입 순간 스틱 캡처값(`ap_hover_throttle`=0일 때) > 기본값(1275). 해제되면 다시 `alt_hold_hover_throttle` |
 | AUTOPILOT 모드 | 2025.12.5에는 `AUTOPILOT_MODE`가 없어 해당 없음(추가되면 같은 조건에 포함) |
 | GPS Rescue | 기존대로 Alt Hold가 꺼지고 `ap_hover_throttle` 사용. v10: `GPS_RESCUE_MODE` 플래그가 켜지는 즉시 전용 값을 건너뜀 |
 | 해제 대기(3-3절) 기준 | 기존대로 `ap_hover_throttle` (0이면 유효한 `alt_hold_hover_throttle`로 폴백) |
 
-구현: `alt_hold_multirotor.c`에 `ALT_HOLD_HOVER_THROTTLE_VALID_MIN/MAX`(1100/1700)와 `altHoldGetHoverThrottle()`을 추가했다. 이 버전에는 "진입 순간 호버 캡처"가 없으므로(2026.6.2의 `autopilotCaptureHoverThrottleForAltHold`에 해당하는 코드 없음) 기존에 `altHoldInit()`에서 한 번 고정하던 `altHold.hoverThrottle`을, 사용 시점마다 `failsafeIsActive()`를 보고 정하는 함수로 바꿨다.
+구현: `alt_hold_multirotor.c`에 `ALT_HOLD_HOVER_THROTTLE_VALID_MIN/MAX`(1100/1700)와 `altHoldGetHoverThrottle()`을 추가했다. v9에서는 2026.6.2의 `autopilotCaptureHoverThrottleForAltHold`에 해당하는 "진입 순간 호버 캡처"가 없어 기존에 `altHoldInit()`에서 한 번 고정하던 `altHold.hoverThrottle`을, 사용 시점마다 `failsafeIsActive()`를 보고 정하는 함수로 바꿨다. v10부터는 진입 순간 캡처(`altHoldCapturedHoverPwm`)가 있으나, 이는 `ap_hover_throttle`이 0인 비정상 상태(CLI로는 설정 불가)에서만 쓰이는 폴백이다.
 
 ## 4. 플래시 후 알려진 오류 줄 (무시 가능)
 
@@ -242,7 +244,7 @@ CLI 파라미터가 아니라 코드에 고정된 동작이다(PG 버전 변경 
 
 ## 6. 주의
 
-- F722 보드는 플래시 사용률이 73.6~79.0%다(v13 기준). 기능 추가 시 다시 확인한다.
+- F722 보드는 플래시 사용률이 73.6~79.0%다(v14 기준). 기능 추가 시 다시 확인한다.
 - `mixer_type = EZLANDING`이 켜져 있으면 Alt Hold 하강 제동에 영향을 줄 수 있으니 시험 전에 확인한다.
 - Pavo25 V2는 자력계가 없다 — Position Hold 동작(자력계 없이 헤딩 추정)을 벤치에서 먼저 확인한다. 이 기체의 CLI 덤프는 Betaflight 4.5.5 기준(오래됨)이니 플래시 전 최신 `diff all`로 재확인한다.
 - **MARIO5(CRSF)/AOS_UL7_O4(FPort)/X8_5INCH(FPort)는 수신기 프로토콜이 CLI로 확정되지 않는다** — CLI에 `serialrx_provider`가 없어 가정한 값이다(자세한 내용: [BUILD_OPTIONS.md](BUILD_OPTIONS.md) 주석 2). 틀리면 플래시 후 수신기가 바인드되지 않으니 벤치에서 먼저 확인한다.
