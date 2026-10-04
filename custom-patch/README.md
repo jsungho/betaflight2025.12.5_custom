@@ -22,7 +22,9 @@
 
 **v13: 교차 검증(GPT) 지적 반영.** (1) 해제 대기 판정이 수신 처리 순서상 이전 프레임의 스로틀을 보던 문제: 스위치를 끄면서 스로틀을 내리면 이전 값(호버)으로 즉시 해제된 뒤 새 값으로 수동 전환될 수 있었다. 이제 같은 프레임의 최신 스로틀(`rcData` 기준)로 판단한다. (2) v12 목표 보정은 스틱이 목표를 움직이는 동안에만 적용(고도 유지·진입 래치·ALT WAIT 중에는 목표 보존). (3) 착륙 보조 속도 상한이 `alt_hold_climb_rate`보다 커지지 않게 제한(예: climb_rate 10이면 100 cm/s 초과 금지). CLI 항목 없음, PG 버전 변경 없음. 유닛테스트 41개.
 
-**v14(현재): RC 스무딩과 입력 기준 정리(교차 검증 2차).** v13의 최신 프레임 스로틀(`rcData` 기준)은 RC 스무딩 필터를 거치지 않아, 스무딩 ON(기본)일 때 기준이 어긋났다. (1) 해제 대기 해제 판정: 스무딩 ON이면 믹서가 해제 직후 실제로 쓰는 필터 출력(`rcCommand[THROTTLE]`)이 호버에 들어왔을 때만 해제(빠른 스틱 조작 시 필터가 따라오는 동안의 순간 저하 방지), OFF이면 최신 프레임 값 사용. (2) 진입 래치: 캡처와 비교를 항상 같은 `rcData` 기준 값으로 통일해, 스틱을 가만히 둬도 필터가 따라오는 동안 래치가 저절로 풀리던 문제 제거. (3) 문서 정정: `ap_hover_throttle`은 CLI로 0 설정 불가(1100~1700) — 0일 때 캡처 동작은 방어용 폴백임을 명시. CLI 항목 없음, PG 버전 변경 없음. 유닛테스트 44개.
+**v14: RC 스무딩과 입력 기준 정리(교차 검증 2차).** v13의 최신 프레임 스로틀(`rcData` 기준)은 RC 스무딩 필터를 거치지 않아, 스무딩 ON(기본)일 때 기준이 어긋났다. (1) 해제 대기 해제 판정: 스무딩 ON이면 믹서가 해제 직후 실제로 쓰는 필터 출력(`rcCommand[THROTTLE]`)이 호버에 들어왔을 때만 해제(빠른 스틱 조작 시 필터가 따라오는 동안의 순간 저하 방지), OFF이면 최신 프레임 값 사용. (2) 진입 래치: 캡처와 비교를 항상 같은 `rcData` 기준 값으로 통일해, 스틱을 가만히 둬도 필터가 따라오는 동안 래치가 저절로 풀리던 문제 제거. (3) 문서 정정: `ap_hover_throttle`은 CLI로 0 설정 불가(1100~1700) — 0일 때 캡처 동작은 방어용 폴백임을 명시. CLI 항목 없음, PG 버전 변경 없음. 유닛테스트 44개.
+
+**v15(현재): 해제 대기 기준의 단위 정렬(전체 재분석 시뮬레이션 결과).** 해제 대기의 기준값 `ap_hover_throttle`은 PWM 값(`min_check` 기준 정규화)인데 비교 대상 `rcCommand[THROTTLE]`은 이미 `min_check`로 1000~2000으로 재매핑된 값이라 단위가 달라, 실제로는 호버 추력보다 약 14% 높은 스틱 위치(예: `ap_hover_throttle` 1300, `min_check` 1050이면 1300 대신 약 1263)에서 해제돼야 하는데 1300 근처에서 해제되던 문제를 수정했다. 이제 `ap_hover_throttle`을 `rcCommand` 단위로 변환해 ±5% 구간과 가로지름 판정을 한다(`min_check`가 다르면 중심도 따라 바뀜). 기준값 자체는 그대로 `ap_hover_throttle`이다. CLI 항목 없음, PG 버전 변경 없음. 유닛테스트 55개(폐루프 시뮬레이션 9개 포함, 시뮬레이션 결과는 BUILD_OPTIONS.md v15절).
 
 - 브랜치: `custom-patch/alt-hold-throttle-range`
 - 참고 이슈: betaflight/betaflight#15775
@@ -36,16 +38,16 @@
 
 | 기체 | 파일 |
 |---|---|
-| MARIO5 (CRSF, PINIO 유지) | `betaflight_2025.12.5_STM32F405_SPEEDYBEEF405V4_MARIO5_custom_v14_slim.hex` |
-| AOS_UL7_O4 (FPort, LED 스트립 제거) | `betaflight_2025.12.5_STM32F405_SPEEDYBEEF405V4_AOSUL7O4_custom_v14_slim.hex` |
-| Mark4_6in | `betaflight_2025.12.5_STM32F405_JHEF405PRO_MARK4_6IN_custom_v14_slim.hex` |
-| TJRC_10 | `betaflight_2025.12.5_STM32F7X2_MATEKF722SE_TJRC10_custom_v14_slim.hex` |
-| 8IN-KOPIS_X8 | `betaflight_2025.12.5_STM32F7X2_SPEEDYBEEF7V3_8INKOPISX8_custom_v14_slim.hex` |
-| CHIMERA7 | `betaflight_2025.12.5_STM32F7X2_FLYWOOF722PROV2_CHIMERA7_custom_v14_slim.hex` |
-| AOS_UL7_X8 | `betaflight_2025.12.5_STM32F7X2_MATEKF722HD_AOSUL7X8_custom_v14_slim.hex` |
-| Explorer LR4 | `betaflight_2025.12.5_STM32F7X2_JHEF7DUAL_EXPLORERLR4_custom_v14_slim.hex` |
-| Pavo25 V2 (CRSF, PINIO, **자력계 없음**, LED 없음) | `betaflight_2025.12.5_STM32F7X2_JHEF7DUAL_PAVO25V2_custom_v14_slim.hex` |
-| X8_5INCH | `betaflight_2025.12.5_STM32H743_MATEKH743_X8_5INCH_custom_v14_slim.hex` |
+| MARIO5 (CRSF, PINIO 유지) | `betaflight_2025.12.5_STM32F405_SPEEDYBEEF405V4_MARIO5_custom_v15_slim.hex` |
+| AOS_UL7_O4 (FPort, LED 스트립 제거) | `betaflight_2025.12.5_STM32F405_SPEEDYBEEF405V4_AOSUL7O4_custom_v15_slim.hex` |
+| Mark4_6in | `betaflight_2025.12.5_STM32F405_JHEF405PRO_MARK4_6IN_custom_v15_slim.hex` |
+| TJRC_10 | `betaflight_2025.12.5_STM32F7X2_MATEKF722SE_TJRC10_custom_v15_slim.hex` |
+| 8IN-KOPIS_X8 | `betaflight_2025.12.5_STM32F7X2_SPEEDYBEEF7V3_8INKOPISX8_custom_v15_slim.hex` |
+| CHIMERA7 | `betaflight_2025.12.5_STM32F7X2_FLYWOOF722PROV2_CHIMERA7_custom_v15_slim.hex` |
+| AOS_UL7_X8 | `betaflight_2025.12.5_STM32F7X2_MATEKF722HD_AOSUL7X8_custom_v15_slim.hex` |
+| Explorer LR4 | `betaflight_2025.12.5_STM32F7X2_JHEF7DUAL_EXPLORERLR4_custom_v15_slim.hex` |
+| Pavo25 V2 (CRSF, PINIO, **자력계 없음**, LED 없음) | `betaflight_2025.12.5_STM32F7X2_JHEF7DUAL_PAVO25V2_custom_v15_slim.hex` |
+| X8_5INCH | `betaflight_2025.12.5_STM32H743_MATEKH743_X8_5INCH_custom_v15_slim.hex` |
 
 보드가 다르면 잘못된 hex다. MARIO5와 AOS_UL7_O4는 같은 FC(SPEEDYBEEF405V4), Pavo25 V2와 Explorer LR4는 같은 FC(JHEF7DUAL)라서 파일명 라벨(MARIO5 / AOSUL7O4 / PAVO25V2 / EXPLORERLR4)까지 확인해야 한다. 파일명의 보드 이름이 기체 FC와 같은지 확인한 뒤 Betaflight Configurator의 **Load Firmware [Local]**로 올린다.
 
@@ -157,7 +159,7 @@ CLI 파라미터가 아니라 코드에 고정된 동작이다(PG 버전 변경 
 CLI 파라미터가 아니라 코드에 고정된 동작이다(PG 버전 변경 없음). 원본: `jsungho/betaflight2026.6.x_custom` 브랜치 `custom-patch/alt-hold-throttle-range-2026.6.2` 커밋 `b83985b`(해제 대기 + OSD 표시), `e4593eb`(해제 기준을 `ap_hover_throttle`로 변경), `415e8c4`(호버 구간을 가로지르면 해제 + 시뮬레이션 테스트, v7)를 이 저장소(2025.12.5) 코드 구조에 맞게 이식. 진입 스틱 래치(3-2절, 커밋 `665f62a`)는 이번 이식 대상이 아니다.
 
 - Alt Hold 스위치를 끈 순간에 Alt Hold가 활성 상태였다면 바로 해제하지 않고 고도를 유지한다(해제 대기). 대기 중에는 스틱에 의한 고도 조절을 완전히 무시하고 목표 고도를 그대로 유지한다.
-- 스로틀 스틱이 `ap_hover_throttle` ±5%(±PWM 50, 1000~2000 범위) 안에 들어오면 그때 Alt Hold를 해제한다. 기준은 `ap_hover_throttle`만 쓴다 — `alt_hold_hover_throttle`, `thr_mid`는 기준이 아니다. `ap_hover_throttle`이 0이면 Alt Hold의 실효 호버 값(`alt_hold_hover_throttle`이 설정돼 있으면 그 값, 아니면 `ap_hover_throttle` 상속분)으로 대체한다.
+- 스로틀 스틱이 `ap_hover_throttle` ±5%(±PWM 50, 1000~2000 범위) 안에 들어오면 그때 Alt Hold를 해제한다. (v15) `ap_hover_throttle`은 `min_check` 재매핑을 거친 `rcCommand` 단위로 변환해 비교한다(예: 1300 → 1263 @ `min_check` 1050). 기준은 `ap_hover_throttle`만 쓴다 — `alt_hold_hover_throttle`, `thr_mid`는 기준이 아니다. `ap_hover_throttle`이 0이면 Alt Hold의 실효 호버 값(`alt_hold_hover_throttle`이 설정돼 있으면 그 값, 아니면 `ap_hover_throttle` 상속분)으로 대체한다.
 - 스위치를 끈 순간 스틱이 이미 그 구간 안에 있으면 바로 해제된다.
 - **(v7) 스틱을 빠르게 움직여 한 사이클(10ms) 사이에 ±5% 구간을 통째로 건너뛰어도 해제된다.** 매 사이클 직전 스틱 값을 저장해뒀다가, 이번 값과 직전 값 사이에서 `스틱 - ap_hover_throttle`의 부호가 바뀌었으면(=호버 값을 가로질렀으면) 구간 안에 정확히 들어오지 않았어도 그 자리에서 해제한다. 위(높은 쪽)에서 아래로, 아래에서 위로 넘어가는 경우 모두 해당. 해제 조건 = `|스틱 - ap_hover_throttle| <= 50` **이거나** 직전 사이클 대비 호버 값을 가로지른 경우.
 - 대기 중 스위치를 다시 켜면 대기를 취소하고 일반 Alt Hold로 복귀한다(이때 3-2절의 진입 스틱 래치가 현재 스틱 위치로 새로 걸린다).
@@ -169,6 +171,11 @@ CLI 파라미터가 아니라 코드에 고정된 동작이다(PG 버전 변경 
 목적: Alt Hold 스위치를 끄는 순간 스틱이 호버 위치와 다르면 스로틀이 갑자기 바뀌던 문제를 막는다 — 스틱을 호버 근처로 가져와야만(혹은 빠르게 그 값을 가로질러야만) 수동 스로틀로 정상 전환된다.
 
 검증: 호스트(PC)에서 돌리는 구글테스트 기반 시뮬레이션(`src/test/unit/althold_unittest.cc`, `AltholdCustomSim` 스위트)으로 진입 래치, 해제 대기 유지/해제, `ap_hover_throttle` 기준(다른 파라미터 아님) 확인, 즉시 해제, 위/아래 양방향 빠른 스틱 이동으로 구간을 건너뛰는 경우, 대기 중 스위치 재투입, 디스암 시 대기 삭제, 진입한 적 없는 상태에서 스위치를 끄면 대기가 시작되지 않는 경우까지 13개 테스트로 확인(실행: `cd src/test && make test_althold_unittest`).
+
+**알아둘 동작 (v15 재분석 시뮬레이션에서 확인)**
+- 스무딩 OFF에서 스위치를 끄면서 같은 프레임에 스틱을 끝까지 내리면, 스틱이 호버를 다시 지나갈 때까지 고도를 유지한다(ALT WAIT). 스무딩 ON(기본)에서는 필터 출력이 내려가며 호버를 지나는 순간 해제된다. 두 경우 모두 설계된 동작이다.
+- 낮은 고도에서 빠르게 하강(약 3.7 m/s, 4 m)하다 복행(스틱 최대 상승)하면, 모델에서는 약 1.7초 뒤에야 상승으로 바뀌어 지면에 닿을 수 있다. v11은 아예 회복하지 못했다. 낮은 고도 복행은 여유를 두고 일찍 시작한다.
+- 펌웨어를 업데이트하면 PID 프로파일(`pidProfiles` PG 11→12)과 Alt Hold 설정(`altHoldConfig` PG 4→6)이 초기화된다. 플래시 후 기체별 CLI(`diff all`)를 반드시 다시 적용한다.
 
 ## 3-4. Alt Hold 착륙 보조 (Landing Assist, v8)
 
@@ -244,7 +251,7 @@ CLI 파라미터가 아니라 코드에 고정된 동작이다(PG 버전 변경 
 
 ## 6. 주의
 
-- F722 보드는 플래시 사용률이 73.6~79.0%다(v14 기준). 기능 추가 시 다시 확인한다.
+- F722 보드는 플래시 사용률이 73.6~79.0%다(v15 기준). 기능 추가 시 다시 확인한다.
 - `mixer_type = EZLANDING`이 켜져 있으면 Alt Hold 하강 제동에 영향을 줄 수 있으니 시험 전에 확인한다.
 - Pavo25 V2는 자력계가 없다 — Position Hold 동작(자력계 없이 헤딩 추정)을 벤치에서 먼저 확인한다. 이 기체의 CLI 덤프는 Betaflight 4.5.5 기준(오래됨)이니 플래시 전 최신 `diff all`로 재확인한다.
 - **MARIO5(CRSF)/AOS_UL7_O4(FPort)/X8_5INCH(FPort)는 수신기 프로토콜이 CLI로 확정되지 않는다** — CLI에 `serialrx_provider`가 없어 가정한 값이다(자세한 내용: [BUILD_OPTIONS.md](BUILD_OPTIONS.md) 주석 2). 틀리면 플래시 후 수신기가 바인드되지 않으니 벤치에서 먼저 확인한다.

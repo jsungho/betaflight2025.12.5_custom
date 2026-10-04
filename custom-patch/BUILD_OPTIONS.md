@@ -4,7 +4,7 @@
 커스텀 패치(4종): `alt_hold_full_low_is_max_descend`, `alt_hold_deadband_low`, `alt_hold_hover_throttle`, `landing_disarm_airmode_off_only` (참고: betaflight/betaflight#15775)
 
 이 저장소의 펌웨어는 **보드별(`make <보드이름>`)** 로 빌드해서, 그 보드/기체가 실제로 쓰지 않는 기능을 빼 플래시 사용량을 줄였다(이전에 있던 통합 타겟(MCU 단위) hex는 제거되었다).
-결과 파일은 기체 이름이 들어간 hex(`..._custom_v14_slim.hex`)이며, **각 기체에 맞는 파일 하나만** 올려야 한다.
+결과 파일은 기체 이름이 들어간 hex(`..._custom_v15_slim.hex`)이며, **각 기체에 맞는 파일 하나만** 올려야 한다.
 
 **v4: 서보(USE_SERVOS)와 배터리-컨티뉴(USE_BATTERY_CONTINUE)를 전 기체에서 제거했고, OSD는 디지털(MSP DisplayPort 등, `USE_OSD_HD`)만 남기고 아날로그 OSD(`USE_OSD_SD`)와 MAX7456 드라이버(`USE_MAX7456`)를 제거했다.** 사용자 지시(2026-09): 이 저장소의 기체는 전부 디지털 VTX(Walksnail 등)만 쓰고 서보/아날로그 OSD를 쓰지 않음.
 
@@ -343,7 +343,7 @@ custom-patch/build_custom.sh
 custom-patch/build_custom.sh MATEKF722SE JHEF7DUAL
 ```
 
-결과는 `custom-patch/firmware/2025.12.5/`에 `betaflight_2025.12.5_<MCU>_<보드>_<기체>_custom_v14_slim.hex` 형식으로 생성된다.
+결과는 `custom-patch/firmware/2025.12.5/`에 `betaflight_2025.12.5_<MCU>_<보드>_<기체>_custom_v15_slim.hex` 형식으로 생성된다.
 
 ## 검증한 내용
 
@@ -423,3 +423,25 @@ ChatGPT 2차 검증의 2건을 코드와 대조했다.
 **검증**: `althold_unittest` 44개 통과. 신규 3개(스무딩 ON: 해제 대기 중 필터 출력이 호버에 닿을 때까지 유지, 스위치 OFF+스로틀 하강 시 연속 해제, 재진입 래치가 필터 수렴만으로 풀리지 않음)는 v13 코드에서 모두 실패함을 확인. 기존 v13 테스트는 스무딩 OFF를 명시. 전 기체 10대 `_v14_slim` 재빌드 성공(경고/오류 없음, F405 39.3~39.8%, F722 73.7~79.1%, H743 24.4%), hex 6종 문자열 포함, `SHA256SUMS.txt` v14로 갱신.
 
 **한계**: 유닛테스트의 `getRcCommandThrottleFromRcData()`는 실제 `rc.c`가 아닌 대체 함수이고 스무딩 필터 자체는 모사하지 않는다(필터 출력을 `rcCommand` 값으로 직접 지정). 실제 필터 지연 크기는 `rc_smoothing_*` 설정에 따르며 실기체/블랙박스로 확인하지 않았다.
+
+## v15 (2026-10-04): 해제 대기 기준 단위 정렬 — 전체 재분석 시뮬레이션 (CLI 파라미터 아님)
+
+v14 전체를 정적 재검토하고 폐루프 시뮬레이션(수직 운동 모델 + RC 스무딩 필터 + 실제 Alt Hold/`altitudeControl`)을 `AltholdClosedLoop` 스위트(S1~S9)로 돌렸다.
+
+**수정**: 해제 대기의 `ap_hover_throttle`(PWM, `min_check` 정규화)과 `rcCommand[THROTTLE]`(`min_check`로 1000~2000 재매핑) 단위가 달라 해제 위치가 약 37 PWM(추력 약 14%) 어긋나던 것을, 기준값을 `rcCommand` 단위로 변환해 비교하도록 고쳤다. 변환식: `1000 + 1000 * (hover - mincheck) / (2000 - mincheck)`, `mincheck`는 `max(min_check, 1000)`. 기준값은 계속 `ap_hover_throttle`이며, Alt Hold 스틱 조절 데드밴드(`alt_hold_hover_throttle` 중심)는 건드리지 않았다(원본과 같은 PWM 직접 비교 유지).
+
+**시뮬레이션 결과(v14 기준 측정, S4/S5는 v15 변환 적용 후)**
+| 시나리오 | 결과 |
+|---|---|
+| S1 10초 고도 유지 | ±1 cm |
+| S2 12 m 풀로우 하강 | 지면 아래로 가지 않음, 착지 속도 -230 cm/s (v11: -349) |
+| S3 4 m 복행 | 약 1.7초 후 상승 전환, 모델에서는 지면 접촉 1회(v11은 미회복). 알려진 한계 |
+| S4/S5 해제 연속성 | 스무딩 ON/OFF 모두 해제 시 추력 단차 작음(실제 호버=ap_hover일 때 +13~+22 PWM) |
+| S6 30 m 실패안전 착륙 | 8.7초, 정상 착지 |
+| S7 저고도 하강풍 | 목표 고도 유지, 복귀 |
+| S8 `climb_rate=10` | 하강 -73 cm/s (상한 100 이내, v11은 -152) |
+| S9 무작위 60회×30초 | NaN·출력 범위 이탈·목표 폭주 없음 |
+
+**검증**: `althold_unittest` 55개 통과(폐루프 9개 + 단위 변환 2개 신규, 기존 해제 시험 1개 기대값 갱신). 10개 보드 빌드, 체크섬은 `SHA256SUMS.txt`.
+
+**한계**: 모델은 단순화되어 실기체 PID·믹서·`throttle_limit`을 반영하지 않는다. OSD "ALT WAIT" 경고 분기는 시험하지 못했다. 펌웨어 업데이트 시 PG 버전 변경(`pidProfiles` 11→12, `altHoldConfig` 4→6)으로 설정이 초기화되므로 CLI 재적용이 필요하다.
