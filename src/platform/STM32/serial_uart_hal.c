@@ -164,7 +164,7 @@ void uartReconfigure(uartPort_t *uartPort)
 #if !(defined(STM32H7) || defined(STM32G4))
             uartPort->rxDMAHandle.Init.Channel = uartPort->rxDMAChannel;
 #else
-            uartPort->txDMAHandle.Init.Request = uartPort->rxDMAChannel;
+            uartPort->rxDMAHandle.Init.Request = uartPort->rxDMAChannel;
 #endif
             uartPort->rxDMAHandle.Init.Direction = DMA_PERIPH_TO_MEMORY;
             uartPort->rxDMAHandle.Init.PeriphInc = DMA_PINC_DISABLE;
