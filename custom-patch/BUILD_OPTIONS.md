@@ -4,7 +4,7 @@
 커스텀 패치(4종): `alt_hold_full_low_is_max_descend`, `alt_hold_deadband_low`, `alt_hold_hover_throttle`, `landing_disarm_airmode_off_only` (참고: betaflight/betaflight#15775)
 
 이 저장소의 펌웨어는 **보드별(`make <보드이름>`)** 로 빌드해서, 그 보드/기체가 실제로 쓰지 않는 기능을 빼 플래시 사용량을 줄였다(이전에 있던 통합 타겟(MCU 단위) hex는 제거되었다).
-결과 파일은 기체 이름이 들어간 hex(`..._custom_v10_slim.hex`)이며, **각 기체에 맞는 파일 하나만** 올려야 한다.
+결과 파일은 기체 이름이 들어간 hex(`..._custom_v12_slim.hex`)이며, **각 기체에 맞는 파일 하나만** 올려야 한다.
 
 **v4: 서보(USE_SERVOS)와 배터리-컨티뉴(USE_BATTERY_CONTINUE)를 전 기체에서 제거했고, OSD는 디지털(MSP DisplayPort 등, `USE_OSD_HD`)만 남기고 아날로그 OSD(`USE_OSD_SD`)와 MAX7456 드라이버(`USE_MAX7456`)를 제거했다.** 사용자 지시(2026-09): 이 저장소의 기체는 전부 디지털 VTX(Walksnail 등)만 쓰고 서보/아날로그 OSD를 쓰지 않음.
 
@@ -343,7 +343,7 @@ custom-patch/build_custom.sh
 custom-patch/build_custom.sh MATEKF722SE JHEF7DUAL
 ```
 
-결과는 `custom-patch/firmware/2025.12.5/`에 `betaflight_2025.12.5_<MCU>_<보드>_<기체>_custom_v10_slim.hex` 형식으로 생성된다.
+결과는 `custom-patch/firmware/2025.12.5/`에 `betaflight_2025.12.5_<MCU>_<보드>_<기체>_custom_v12_slim.hex` 형식으로 생성된다.
 
 ## 검증한 내용
 
@@ -383,3 +383,11 @@ custom-patch/build_custom.sh MATEKF722SE JHEF7DUAL
 - `custom-patch/build_custom.sh` 접미사 `custom_v10_slim` → `custom_v11_slim`.
 
 **검증**: 전 기체(10대) slim 재빌드 성공, 경고/오류 없음, 플래시 사용률 F405 39.2~39.7%, F722 73.7~79.0%, H743 24.4%. 10개 hex 모두에 `"ALT WAIT"`, `"ALTHOLD : LANDING"`, `alt_hold_hover_throttle` 문자열 포함. 호스트 유닛테스트 `osd_unittest` 21개, `althold_unittest` 34개 통과. 기체 비행/벤치 시험은 하지 않았다(프롭 제거 벤치에서 Alt Hold 스위치 ON→OFF 후 경고창에 `ALT WAIT`가 뜨고, 비행모드 칸은 `ALTH`인지 확인 필요).
+
+## v12 (2026-10-04): 착륙 보조 속도 상한 전환 시 목표 고도 고착 수정 (CLI 파라미터 아님)
+
+**문제**: 목표 고도는 `|현재고도 − 목표고도| < maxVelocity × 1초`일 때만 갱신되는데, 착륙 보조(v8)가 `maxVelocity`를 낮추면(`gps_rescue_descend_rate 135` 기준 700 → 270(5m 이하) → 135(1.8m 이하) cm) 기존 목표 선행량이 새 문턱보다 커질 수 있다. 이 경우 오차가 줄 때까지 스틱 입력이 목표 고도에 반영되지 않았다(예: 문턱 300에서 오차 350). 시뮬레이션으로 재현함.
+
+**수정**: `src/main/flight/alt_hold_multirotor.c` `altHoldUpdateTargetAltitude()` — 착륙 보조가 상한을 낮춘 경우(`maxVelocity < altHold.maxVelocity`)에만, 목표 고도를 현재고도 ± (새 문턱 × 0.9) 안으로 끌어당긴다. 일반 Alt Hold 상한과 페일세이프에는 적용하지 않아 기존 동작 그대로다. CLI/PG 변경 없음. `build_custom.sh` 접미사 `custom_v11_slim` → `custom_v12_slim`.
+
+**검증**: `althold_unittest` 37개 통과(신규 3개: 5m 구간 오차 350/문턱 300 전환 후 스틱 상승 시 목표 이동, 1.8m 구간 동일, 비착륙(Airmode ON)에서는 기존 고착 동작 유지). 수정 전 코드에서는 신규 앞의 2개가 실패함을 확인. 전 기체 10대 slim 재빌드 성공, 경고/오류 없음, 플래시 F405 39.2~39.8%, F722 73.7~79.0%, H743 24.4%, hex 6종 문자열 모두 포함. 비행 시험은 하지 않았다.

@@ -472,6 +472,54 @@ TEST_F(AltholdLandingAssist, ClimbAlsoCappedWhileLanding)
     EXPECT_NEAR(altHold.targetVelocity, 150.0f, 1.0f);
 }
 
+// v12: landing assist lowering the rate cap must not freeze the target (stick ignored) when the existing
+// target lead is larger than the new 1 s gate (e.g. 350 cm lead vs 300 cm gate below 5 m).
+TEST_F(AltholdLandingAssist, RateDropDoesNotFreezeTargetWhenLeadExceedsNewGate)
+{
+    flightModeFlags = 0; altHoldInit(); altHoldClearExitPending();
+    run(false, 1000, 1);
+    testAltitudeCm = 800.0f;
+    run(true, 1400, 1);                                // fresh entry at 8 m
+    run(true, 1000, 150);                              // full low: target leads 700 cm below the (fixed) altitude
+    EXPECT_NEAR(800.0f - altHold.targetAltitudeCm, 700.0f, 10.0f);
+    testAltitudeCm = 450.0f;                           // below 5 m: cap 300 cm/s, lead would be 350 > gate 300
+    run(true, 2000, 1);                                // pilot commands full climb
+    const float t1 = altHold.targetAltitudeCm;
+    EXPECT_LE(450.0f - t1, 300.0f);                    // lead pulled inside the new gate
+    run(true, 2000, 50);                               // 0.5 s of climb command
+    EXPECT_NEAR(altHold.targetAltitudeCm - t1, 150.0f, 5.0f);   // +300 cm/s x 0.5 s: stick moves the target
+}
+
+TEST_F(AltholdLandingAssist, NearGroundRateDropAlsoPullsTargetIn)
+{
+    flightModeFlags = 0; altHoldInit(); altHoldClearExitPending();
+    run(false, 1000, 1);
+    testAltitudeCm = 300.0f;
+    run(true, 1400, 1);
+    run(true, 1000, 150);                              // 5 m zone (cap 300): lead held at 0.9 x gate = 270 cm
+    EXPECT_NEAR(300.0f - altHold.targetAltitudeCm, 270.0f, 10.0f);
+    testAltitudeCm = 170.0f;                           // below 1.8 m: cap 150 cm/s, gate 150, lead would be 170
+    run(true, 2000, 1);
+    EXPECT_LE(170.0f - altHold.targetAltitudeCm, 150.0f);       // pulled inside the new gate
+    const float t1 = altHold.targetAltitudeCm;
+    run(true, 2000, 50);
+    EXPECT_NEAR(altHold.targetAltitudeCm - t1, 75.0f, 5.0f);    // +150 cm/s x 0.5 s: stick moves the target
+}
+
+TEST_F(AltholdLandingAssist, NormalCapStillFreezesFarTargetAsStock)
+{
+    // outside landing assist (airmode ON) the stock gate behaviour is unchanged
+    flightModeFlags = 0; altHoldInit(); altHoldClearExitPending();
+    testAirmodeEnabled = true;
+    run(false, 1000, 1);
+    testAltitudeCm = 800.0f;
+    run(true, 1400, 1);
+    testAltitudeCm = 0.0f;                             // 800 cm away > 700 gate
+    const float t0 = altHold.targetAltitudeCm;
+    run(true, 2000, 20);
+    EXPECT_NEAR(altHold.targetAltitudeCm, t0, 0.5f);
+}
+
 TEST_F(AltholdLandingAssist, LandingModeHasHysteresisFiveOnFivePointFiveOff)
 {
     testAltitudeCm = 501.0f;

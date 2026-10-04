@@ -283,6 +283,16 @@ static void altHoldUpdateTargetAltitude(void)
     const float maxVelocity = altHoldMaxClimbRate();
     altHold.targetVelocity = stickFactor * maxVelocity;
 
+    // custom-patch (v12): landing assist can lower maxVelocity below the lead the target already has over the
+    // current altitude (e.g. 700 -> 270 cm at 5 m). The 1 s gate below would then freeze the target (stick ignored)
+    // until the quad closes the gap. Pull the target back inside the new gate so the stick keeps working.
+    // Not applied to the normal cap (altHold.maxVelocity) or failsafe, which keep the stock behaviour.
+    if (maxVelocity < altHold.maxVelocity) {
+        const float limitCm = maxVelocity * 1.0f /* s */ * 0.9f;  // 0.9: stay strictly inside the "<" gate below
+        const float altitudeCm = getAltitudeCm();
+        altHold.targetAltitudeCm = constrainf(altHold.targetAltitudeCm, altitudeCm - limitCm, altitudeCm + limitCm);
+    }
+
     // prevent stick input from moving target altitude too far away from current altitude
     // otherwise it can be difficult to bring target altitude close to current altitude in a reasonable time
     // using maxVelocity means the stick can bring altitude target to current within 1s
