@@ -819,7 +819,7 @@ protected:
     float minZ = 1e9f, maxV = -1e9f, minV = 1e9f;
     float maxLead = 0.0f;                // max |target - z| while Alt Hold active
     float t = 0.0f;
-    float releaseStep = 0.0f; bool prevOn = false;
+    float releaseStep = 0.0f; bool prevOn = false; float minZRaw = 1e9f;
 
     void SetUp() override {
         AltholdCustomSim::SetUp();
@@ -845,7 +845,7 @@ protected:
         flightModeFlags = 0; altHoldInit(); altHoldClearExitPending();
         rxConfigMutable()->rc_smoothing = smoothing;
         testAltitudeCm = z; testAltitudeDerivativeCmS = v;
-        t = 0; releaseStep = 0; prevOn = false; maxStep = 0; minZ = 1e9f; maxV = -1e9f; minV = 1e9f; maxLead = 0;
+        t = 0; releaseStep = 0; prevOn = false; minZRaw = 1e9f; maxStep = 0; minZ = 1e9f; maxV = -1e9f; minV = 1e9f; maxLead = 0;
         outPwmEq = prevOutPwmEq = stick;
     }
     // one 10 ms cycle. sw = Alt Hold switch, stick = raw stick (rcCommand units)
@@ -855,7 +855,8 @@ protected:
         // RC link frame: modes decided while rcCommand still holds the previous (filtered) value
         testRcThrottleNow = stick;                          // newest rcData-derived throttle
         testThrottleStatus = rcCommand[THROTTLE] < 1050 ? THROTTLE_LOW : THROTTLE_HIGH;
-        if (armed && altHoldRequestActive(sw)) flightModeFlags |= ALT_HOLD_MODE;
+        const bool swRequest = altHoldRequestActive(sw);              // evaluated first, like core.c's ALT_HOLD_SWITCH_REQUEST()
+        if (armed && (swRequest || testFailsafeActive)) flightModeFlags |= ALT_HOLD_MODE;
         else { flightModeFlags &= ~ALT_HOLD_MODE; altHoldClearExitPending(); }
         // updateRcCommands() then the PID loop smoothing
         if (smoothing) {
@@ -865,13 +866,15 @@ protected:
             rcCommand[THROTTLE] = stick;
         }
         testThrottleStatus = rcCommand[THROTTLE] < 1050 ? THROTTLE_LOW : THROTTLE_HIGH;
-        testRcThrottleNow = -1.0f;
         testAltitudeCm = z; testAltitudeDerivativeCmS = v;
+        // the firmware's getRcCommandThrottleFromRcData() still reads the newest rcData in the Alt Hold task:
+        // keep testRcThrottleNow = stick through updateAltHold() (entry latch / re-entry capture use the raw input)
         updateAltHold(currentTimeUs);
+        testRcThrottleNow = -1.0f;
         const bool on = flightModeFlags & ALT_HOLD_MODE;
         outPwmEq = on ? thrPwm() : rcCommand[THROTTLE];
         outPwmEq = constrainf(outPwmEq, 1000.0f, 2000.0f);
-        if (prevOn && !on) releaseStep = outPwmEq - prevOutPwmEq;
+        if (prevOn && !on) { releaseStep = outPwmEq - prevOutPwmEq; }
         prevOn = on;
         maxStep = fmaxf(maxStep, fabsf(outPwmEq - prevOutPwmEq));
         prevOutPwmEq = outPwmEq;
@@ -880,6 +883,7 @@ protected:
         thrustFrac += (cmd - thrustFrac) * (dt / 0.04f);    // motor/prop lag 40 ms
         float a = 981.0f * (thrustFrac / hoverFrac - 1.0f) - 0.25f * v;   // thrust accel minus drag
         v += a * dt; z += v * dt;
+        minZRaw = fminf(minZRaw, z);
         if (z <= 0.0f) { z = 0.0f; if (v < 0) v = 0; if (a < 0) v = 0; }
         t += dt;
         minZ = fminf(minZ, z); maxV = fmaxf(maxV, v); minV = fminf(minV, v);
@@ -909,7 +913,10 @@ TEST_F(AltholdClosedLoop, S2_FullLowDescentFrom12mLandsWithoutOvershoot)
     }
     tTouch = t;
     printf("[S2] descent 12m: t=%.1fs v(5m)=%.0f v(2m)=%.0f touchdown v=%.0f vMin=%.0f maxLead=%.0f\n", tTouch, vAt5, vAt2, vTouch, minV, maxLead);
-    EXPECT_GE(minZ, 0.0f);
+    EXPECT_GT(z, -1.0f);
+    EXPECT_LE(z, 0.5f);                                            // actually landed
+    EXPECT_LT(tTouch, 30.0f);                                      // within the time limit
+    EXPECT_GE(minZRaw, -15.0f);                                    // unclamped altitude: no meaningful undershoot (plant clamps z at 0)
     EXPECT_GE(minV, -760.0f);                                      // never faster than the normal cap (700) + margin
     EXPECT_LE(vAt2, 0.0f);
     EXPECT_GE(vAt2, -330.0f);
@@ -961,30 +968,75 @@ TEST_F(AltholdClosedLoop, S4_ExitHoldHandOver_FastStickToHover)
 TEST_F(AltholdClosedLoop, S5_SwitchOffWithStickDropSameFrame)
 {
     for (int sm = 1; sm >= 0; sm--) {
+      for (int atHover = 1; atHover >= 0; atHover--) {
         smoothing = sm;
-        initState(1000.0f, 1450.0f);
-        runFor(true, 1450.0f, 2.0f);
+        const float holdStick = atHover ? 1263.0f : 1450.0f;      // 1263 = ap_hover_throttle(1300) on the rcCommand scale
+        hoverFrac = 0.263f; altHoldConfigMutable()->hoverThrottle = 0; altHoldInit();
+        initState(1000.0f, holdStick);
+        runFor(true, holdStick, 2.0f);
         const float zBefore = z;
-        maxStep = 0; minV = 1e9f;
+        maxStep = 0; minV = 1e9f; releaseStep = 0;
         cycle(false, 1000.0f);                                     // switch off and stick to 1000 in the same frame
         const bool releasedImmediately = !modeOn();
         runFor(false, 1000.0f, 0.5f);
-        printf("[S5] smoothing=%d: releasedImmediately=%d maxStep=%.1f z %.0f -> %.0f minV=%.0f (stick commanded low: descent expected)\n",
-               sm, (int)releasedImmediately, maxStep, zBefore, z, minV);
-        EXPECT_TRUE(std::isfinite(z));
+        printf("[S5] smoothing=%d stickAtHover=%d: releasedImmediately=%d releaseStep=%.1f pending=%d mode=%d z %.0f -> %.0f minV=%.0f\n",
+               sm, atHover, (int)releasedImmediately, releaseStep, (int)isAltHoldExitPending(), (int)modeOn(), zBefore, z, minV);
+        if (sm && atHover) {
+            // filtered rcCommand is still at hover on the switch-off frame: immediate and continuous release, then manual descends
+            EXPECT_TRUE(releasedImmediately);
+            EXPECT_FALSE(isAltHoldExitPending());
+            EXPECT_LT(fabsf(releaseStep), 25.0f);
+            EXPECT_LT(z, zBefore - 5.0f);
+        } else if (sm) {
+            // filter output still above the band: ALT WAIT until the filtered value crosses hover (a few cycles), then manual
+            EXPECT_FALSE(releasedImmediately);
+            EXPECT_FALSE(isAltHoldExitPending());
+            EXPECT_FALSE(modeOn());
+            EXPECT_LT(z, zBefore - 5.0f);
+        } else {
+            // smoothing OFF: raw stick is already far below hover on the switch-off frame -> ALT WAIT keeps holding the altitude
+            EXPECT_FALSE(releasedImmediately);
+            EXPECT_TRUE(isAltHoldExitPending());
+            EXPECT_TRUE(modeOn());
+            EXPECT_LT(maxStep, 5.0f);
+            EXPECT_NEAR(z, zBefore, 40.0f);
+        }
+      }
     }
 }
 
-TEST_F(AltholdClosedLoop, S6_FailsafeLandingFrom30m)
+TEST_F(AltholdClosedLoop, S6_FailsafeLandingFrom30m_SwitchOff)
 {
-    initState(3000.0f, 1450.0f);
-    runFor(true, 1450.0f, 1.0f);
+    // core.c activates Alt Hold for failsafe landing even when the switch is off
+    initState(3000.0f, 1368.0f);                                   // manual hover (thrust 0.368)
+    runFor(false, 1368.0f, 1.0f);
+    EXPECT_FALSE(modeOn());
     testFailsafeActive = true;
-    for (int i = 0; i < 12000 && z > 0.5f; i++) cycle(true, 1450.0f);
-    testFailsafeActive = false;
-    printf("[S6] failsafe landing from 30m: t=%.1fs z=%.0f vMin=%.0f vAtEnd=%.0f maxLead=%.0f\n", t, z, minV, v, maxLead);
-    EXPECT_LT(z, 1.0f);
-    EXPECT_GE(minZ, 0.0f);
+    cycle(false, 1368.0f);
+    EXPECT_TRUE(modeOn());                                         // failsafe alone engages the mode
+    for (int i = 0; i < 12000 && z > 0.5f; i++) cycle(false, 1368.0f);
+    const float tLand = t;
+    printf("[S6] failsafe landing (switch off) from 30m: t=%.1fs z=%.0f vMin=%.0f vAtEnd=%.0f minZRaw=%.0f\n", tLand, z, minV, v, minZRaw);
+    EXPECT_LE(z, 0.5f);
+    EXPECT_LT(tLand, 60.0f);
+    EXPECT_GE(minZRaw, -15.0f);
+    testFailsafeActive = false;                                    // failsafe recovered, switch still off
+    cycle(false, 1368.0f);
+    EXPECT_FALSE(modeOn());
+    EXPECT_FALSE(isAltHoldExitPending());
+}
+
+TEST_F(AltholdClosedLoop, S6b_FailsafeEndsWhileSwitchTurnedOffDuringIt)
+{
+    initState(2000.0f, 1450.0f);
+    runFor(true, 1450.0f, 1.0f);                                   // pilot Alt Hold
+    testFailsafeActive = true;
+    runFor(false, 1000.0f, 0.5f);                                  // switch off during failsafe, stick low: ALT WAIT pending, held by failsafe
+    EXPECT_TRUE(modeOn());
+    testFailsafeActive = false;                                    // failsafe ends: no switch, stick far from hover
+    cycle(false, 1000.0f);
+    printf("[S6b] failsafe ended after switch off: mode=%d pending=%d\n", (int)modeOn(), (int)isAltHoldExitPending());
+    EXPECT_EQ(modeOn(), isAltHoldExitPending());                   // never "pending" without the mode (and vice versa)
 }
 
 TEST_F(AltholdClosedLoop, S7_LandingZoneHoldKeepsTargetAfterGust)
