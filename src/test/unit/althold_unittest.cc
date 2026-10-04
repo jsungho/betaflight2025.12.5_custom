@@ -65,6 +65,9 @@ extern "C" {
 
     bool testFailsafeActive = false;
     bool failsafeIsActive(void) { return testFailsafeActive; }
+    // v13: newest rcData-derived throttle (what updateRcCommands() will produce); <0 = same as rcCommand (no stale frame)
+    float testRcThrottleNow = -1.0f;
+    float getRcCommandThrottleFromRcData(void) { return testRcThrottleNow >= 0.0f ? testRcThrottleNow : rcCommand[THROTTLE]; }
     timeUs_t currentTimeUs = 0;
     bool isAltHoldActive();
     bool isAltHoldLandingMode(void);
@@ -74,6 +77,7 @@ extern "C" {
     extern throttleStatus_e testThrottleStatus;
     extern bool testAirmodeEnabled;
     extern bool testFailsafeActive;
+    extern float testRcThrottleNow;
     // prefix of altHoldState_t (alt_hold_multirotor.c), for observing the commanded vertical velocity
     extern struct { bool isActive; float targetAltitudeCm; float maxVelocity; float targetVelocity; } altHold;
 }
@@ -168,6 +172,23 @@ protected:
         updateAltHold(currentTimeUs);
     }
     void run(bool sw, float stick, int n) { for (int i = 0; i < n; i++) step(sw, stick); }
+    // v13: real RX order: flight-mode decision runs while rcCommand[THROTTLE] still holds the OLD frame's value,
+    // then updateRcCommands() publishes the new one
+    void stepStale(bool sw, float oldStick, float newStick) {
+        rcCommand[THROTTLE] = oldStick;
+        testRcThrottleNow = newStick;
+        testThrottleStatus = oldStick < 1050 ? THROTTLE_LOW : THROTTLE_HIGH;
+        if (armed && altHoldRequestActive(sw)) {
+            flightModeFlags |= ALT_HOLD_MODE;
+        } else {
+            flightModeFlags &= ~ALT_HOLD_MODE;
+            altHoldClearExitPending();
+        }
+        rcCommand[THROTTLE] = newStick;                 // updateRcCommands()
+        testRcThrottleNow = -1.0f;
+        testThrottleStatus = newStick < 1050 ? THROTTLE_LOW : THROTTLE_HIGH;
+        updateAltHold(currentTimeUs);
+    }
     float thrPwm() const { return 1000.0f + 1000.0f * getAutopilotThrottle(); }
     bool modeOn() const { return flightModeFlags & ALT_HOLD_MODE; }
 };
@@ -407,6 +428,27 @@ TEST_F(AltholdHoverThrottle, ZeroInheritsApHover)
     EXPECT_NEAR(thrPwm(), pwmFor(1300), 1.0f);
 }
 
+// v13: switch off + stick drop in the same RX frame must not release on the previous frame's stick value
+TEST_F(AltholdCustomSim, ExitDecisionUsesNewFrameThrottleNotStaleRcCommand)
+{
+    run(true, 1300, 50);                               // Alt Hold on, stick at ap_hover_throttle (1300)
+    stepStale(false, 1300, 1000);                      // switch off AND stick to 1000 in the same frame
+    EXPECT_TRUE(modeOn());                             // still holding (old stale 1300 would have released at once)
+    EXPECT_TRUE(isAltHoldExitPending());
+    run(false, 1000, 5);
+    EXPECT_TRUE(modeOn());                             // stick far from hover: keeps holding
+    run(false, 1300, 1);                               // stick back to hover: now released
+    EXPECT_FALSE(modeOn());
+}
+
+TEST_F(AltholdCustomSim, ExitDecisionReleasesWhenNewFrameIsAtHover)
+{
+    run(true, 1000 + 1, 1);                            // (entry value irrelevant)
+    run(true, 1500, 50);
+    stepStale(false, 1000, 1300);                      // stale value far from hover, new frame exactly at hover
+    EXPECT_FALSE(modeOn());                            // released on the new value
+}
+
 #ifdef USE_GPS_RESCUE
 class AltholdLandingAssist : public AltholdCustomSim {
 protected:
@@ -504,6 +546,33 @@ TEST_F(AltholdLandingAssist, NearGroundRateDropAlsoPullsTargetIn)
     const float t1 = altHold.targetAltitudeCm;
     run(true, 2000, 50);
     EXPECT_NEAR(altHold.targetAltitudeCm - t1, 75.0f, 5.0f);    // +150 cm/s x 0.5 s: stick moves the target
+}
+
+// v13: holding (stick in the deadband / entry latch) must keep the target even if the quad sags below it
+TEST_F(AltholdLandingAssist, HoldingKeepsTargetWhenQuadSags)
+{
+    flightModeFlags = 0; altHoldInit(); altHoldClearExitPending();
+    run(false, 1000, 1);
+    testAltitudeCm = 150.0f;
+    run(true, 1400, 1);                                // entry at 1.5 m, stick at hover -> entry latch holds
+    testAltitudeCm = 0.0f;                             // quad sags to the ground, error 150 > 0.9 x gate(150)
+    run(true, 1400, 50);
+    EXPECT_NEAR(altHold.targetAltitudeCm, 150.0f, 0.5f);   // no clamp while the stick is not moving the target
+}
+
+// v13: landing assist must never raise the cap above alt_hold_climb_rate
+TEST_F(AltholdLandingAssist, LandingCapNeverAboveClimbRate)
+{
+    altHoldConfigMutable()->climbRate = 10;            // 100 cm/s, below gps_rescue_descend_rate x1 (150) and x2 (300)
+    flightModeFlags = 0; altHoldInit(); altHoldClearExitPending();
+    run(false, 1000, 1);
+    testAltitudeCm = 450.0f;
+    run(true, 1400, 1);
+    run(true, 1000, 3);
+    EXPECT_NEAR(altHold.targetVelocity, -100.0f, 1.0f);    // x2 rule would give -300
+    testAltitudeCm = 150.0f;
+    run(true, 1000, 3);
+    EXPECT_NEAR(altHold.targetVelocity, -100.0f, 1.0f);    // x1 rule would give -150
 }
 
 TEST_F(AltholdLandingAssist, NormalCapStillFreezesFarTargetAsStock)

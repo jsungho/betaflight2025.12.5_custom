@@ -113,11 +113,12 @@ static float altHoldMaxClimbRate(void)
         const float altitudeCm = getAltitudeCm();
         altHoldLandingNearLatched = altHoldLandingNearLatched ? (altitudeCm <= ALT_HOLD_LANDING_ALT_LOW_OFF_CM)
                                                                : (altitudeCm <= ALT_HOLD_LANDING_ALT_LOW_ON_CM);
+        // v13: landing assist only ever lowers the cap; never above alt_hold_climb_rate (e.g. climb_rate 10 = 100 cm/s)
         if (altHoldLandingNearLatched) {
-            return descendRateCmS;
+            return MIN(descendRateCmS, altHold.maxVelocity);
         }
         // isAltHoldLandingMode() above already applied the 5.0 m on / 5.5 m off hysteresis
-        return descendRateCmS * 2.0f;
+        return MIN(descendRateCmS * 2.0f, altHold.maxVelocity);
     }
 #endif
     return altHold.maxVelocity;
@@ -283,11 +284,13 @@ static void altHoldUpdateTargetAltitude(void)
     const float maxVelocity = altHoldMaxClimbRate();
     altHold.targetVelocity = stickFactor * maxVelocity;
 
-    // custom-patch (v12): landing assist can lower maxVelocity below the lead the target already has over the
+    // custom-patch (v12, v13): landing assist can lower maxVelocity below the lead the target already has over the
     // current altitude (e.g. 700 -> 270 cm at 5 m). The 1 s gate below would then freeze the target (stick ignored)
     // until the quad closes the gap. Pull the target back inside the new gate so the stick keeps working.
     // Not applied to the normal cap (altHold.maxVelocity) or failsafe, which keep the stock behaviour.
-    if (maxVelocity < altHold.maxVelocity) {
+    // v13: only while the stick is actively moving the target (stickFactor != 0). While holding (stick in deadband,
+    // entry latch, ALT WAIT) the target is left untouched so the hold altitude is preserved.
+    if (stickFactor != 0.0f && maxVelocity < altHold.maxVelocity) {
         const float limitCm = maxVelocity * 1.0f /* s */ * 0.9f;  // 0.9: stay strictly inside the "<" gate below
         const float altitudeCm = getAltitudeCm();
         altHold.targetAltitudeCm = constrainf(altHold.targetAltitudeCm, altitudeCm - limitCm, altitudeCm + limitCm);
@@ -349,7 +352,7 @@ bool altHoldRequestActive(bool switchOn)
         if (altHold.exitPending) {
             // switched back on while waiting: behave like a fresh entry, latch the stick where it is now
             altHold.exitPending = false;
-            altHold.entryThrottle = rcCommand[THROTTLE];
+            altHold.entryThrottle = getRcCommandThrottleFromRcData();
             altHold.entryLatched = true;
         }
         return true;
@@ -358,7 +361,7 @@ bool altHoldRequestActive(bool switchOn)
     if (wasSwitchOn && altHold.isActive) {
         // switch just turned off while Alt Hold was active: keep holding unless the stick is already at hover
         altHold.exitPending = true;
-        altHold.exitPrevThrottle = rcCommand[THROTTLE];
+        altHold.exitPrevThrottle = getRcCommandThrottleFromRcData();   // v13: new frame's value, see rc.c
     }
 
     if (altHold.exitPending) {
@@ -369,8 +372,11 @@ bool altHoldRequestActive(bool switchOn)
             : altHoldCapturedHoverPwm != 0 ? (float)altHoldCapturedHoverPwm
             : altHoldOverrideHoverPwm != 0 ? (float)altHoldOverrideHoverPwm : (float)AP_HOVER_THROTTLE_DEFAULT;
         const float prevDelta = altHold.exitPrevThrottle - hoverPwm;
-        const float delta = rcCommand[THROTTLE] - hoverPwm;
-        altHold.exitPrevThrottle = rcCommand[THROTTLE];
+        // v13: this runs from processRxModes(), before updateRcCommands() refreshes rcCommand[THROTTLE]; judge the
+        // release on the newest rcData-derived throttle so we never release on the old value and then go manual on the new one
+        const float throttleNow = getRcCommandThrottleFromRcData();
+        const float delta = throttleNow - hoverPwm;
+        altHold.exitPrevThrottle = throttleNow;
         // custom-patch: release when the stick is inside the band, or has crossed hover since the last sample
         // (a fast stick flick can jump clean over the +/-5% band between two samples, skipping it entirely)
         if (fabsf(delta) <= ALT_HOLD_EXIT_HOVER_BAND_PWM || (prevDelta < 0.0f) != (delta < 0.0f)) {

@@ -14,7 +14,13 @@
 
 **v9: `alt_hold_hover_throttle` 값 검증 + 적용 범위 한정.** (1) 허용값은 **0 또는 1100~1700**이다. CLI 범위(0~1700)는 그대로라 `1`, `500` 같은 값도 저장은 되지만, 1100 미만/1700 초과의 0이 아닌 값은 **무시(0으로 간주)** 되어 `ap_hover_throttle`을 쓴다. (2) 이 값은 **조종자가 Alt Hold / Position Hold 스위치로 켠 경우에만** 쓴다. 페일세이프 착륙(페일세이프도 `ALT_HOLD_MODE`를 켠다)과 GPS Rescue는 `ap_hover_throttle`을 쓴다(페일세이프가 해제되면 다시 `alt_hold_hover_throttle`). 이 버전(2025.12.5)에는 `AUTOPILOT_MODE`가 없어 해당 조건은 코드에 없다. CLI 항목 없음, PG 버전 변경 없음. 자세한 내용은 3-5절 참고. 호스트 유닛테스트 `AltholdHoverThrottle` 5개를 추가해 총 30개로 검증했다. 파일명 접미사는 `_v9_slim`.
 
-**v10(현재): 호버 변수 분리 + 우선순위 정리(v9 보완).** v9는 `alt_hold_hover_throttle`과 `ap_hover_throttle`이 0일 때의 스틱 캡처값을 구별하지 못했다. 이제 진입 시 `altHoldOverrideHoverPwm`(검증된 `alt_hold_hover_throttle`, 없으면 0)과 `altHoldCapturedHoverPwm`(`ap_hover_throttle`이 0일 때만 진입 순간 스틱 값, 아니면 0)을 따로 저장하고, Alt Hold 종료/초기화 시 둘 다 0으로 만든다. 호버 우선순위: ① 전용 값(조종자 스위치일 때만 — 페일세이프, GPS Rescue 중에는 제외) ② `ap_hover_throttle` ③ 진입 순간 스틱 캡처값 ④ 기본값 1275. GPS Rescue 플래그가 켜지는 즉시(Alt Hold 작업이 해제 처리하기 전 한 주기) 전용 값을 건너뛴다. 2025.12.5에는 `AUTOPILOT_MODE`가 없어 그 조건은 해당 없음. CLI 항목 없음, PG 버전 변경 없음. 자세한 내용은 3-5절 참고. 유닛테스트 `AltholdHoverThrottle` 9개(총 34개).
+**v10: 호버 변수 분리 + 우선순위 정리(v9 보완).** v9는 `alt_hold_hover_throttle`과 `ap_hover_throttle`이 0일 때의 스틱 캡처값을 구별하지 못했다. 이제 진입 시 `altHoldOverrideHoverPwm`(검증된 `alt_hold_hover_throttle`, 없으면 0)과 `altHoldCapturedHoverPwm`(`ap_hover_throttle`이 0일 때만 진입 순간 스틱 값, 아니면 0)을 따로 저장하고, Alt Hold 종료/초기화 시 둘 다 0으로 만든다. 호버 우선순위: ① 전용 값(조종자 스위치일 때만 — 페일세이프, GPS Rescue 중에는 제외) ② `ap_hover_throttle` ③ 진입 순간 스틱 캡처값 ④ 기본값 1275. GPS Rescue 플래그가 켜지는 즉시(Alt Hold 작업이 해제 처리하기 전 한 주기) 전용 값을 건너뛴다. 2025.12.5에는 `AUTOPILOT_MODE`가 없어 그 조건은 해당 없음. CLI 항목 없음, PG 버전 변경 없음. 자세한 내용은 3-5절 참고. 유닛테스트 `AltholdHoverThrottle` 9개(총 34개).
+
+**v11: OSD "ALT WAIT"를 비행모드 칸에서 경고창으로 이동.** 8글자가 4글자용 칸을 넘어 옆 요소와 겹치던 문제 수정. CLI 항목 없음.
+
+**v12: 착륙 보조 속도 상한 전환 시 목표 고도 고착 수정.** 착륙 보조가 상한을 낮출 때 기존 목표 선행량이 새 1초 문턱보다 크면 스틱이 목표 고도에 반영되지 않던 문제를 목표를 문턱 안으로 끌어당겨 해결. CLI 항목 없음.
+
+**v13(현재): 교차 검증(GPT) 지적 반영.** (1) 해제 대기 판정이 수신 처리 순서상 이전 프레임의 스로틀을 보던 문제: 스위치를 끄면서 스로틀을 내리면 이전 값(호버)으로 즉시 해제된 뒤 새 값으로 수동 전환될 수 있었다. 이제 같은 프레임의 최신 스로틀(`rcData` 기준)로 판단한다. (2) v12 목표 보정은 스틱이 목표를 움직이는 동안에만 적용(고도 유지·진입 래치·ALT WAIT 중에는 목표 보존). (3) 착륙 보조 속도 상한이 `alt_hold_climb_rate`보다 커지지 않게 제한(예: climb_rate 10이면 100 cm/s 초과 금지). CLI 항목 없음, PG 버전 변경 없음. 유닛테스트 41개.
 
 - 브랜치: `custom-patch/alt-hold-throttle-range`
 - 참고 이슈: betaflight/betaflight#15775
@@ -28,16 +34,16 @@
 
 | 기체 | 파일 |
 |---|---|
-| MARIO5 (CRSF, PINIO 유지) | `betaflight_2025.12.5_STM32F405_SPEEDYBEEF405V4_MARIO5_custom_v10_slim.hex` |
-| AOS_UL7_O4 (FPort, LED 스트립 제거) | `betaflight_2025.12.5_STM32F405_SPEEDYBEEF405V4_AOSUL7O4_custom_v10_slim.hex` |
-| Mark4_6in | `betaflight_2025.12.5_STM32F405_JHEF405PRO_MARK4_6IN_custom_v10_slim.hex` |
-| TJRC_10 | `betaflight_2025.12.5_STM32F7X2_MATEKF722SE_TJRC10_custom_v10_slim.hex` |
-| 8IN-KOPIS_X8 | `betaflight_2025.12.5_STM32F7X2_SPEEDYBEEF7V3_8INKOPISX8_custom_v10_slim.hex` |
-| CHIMERA7 | `betaflight_2025.12.5_STM32F7X2_FLYWOOF722PROV2_CHIMERA7_custom_v10_slim.hex` |
-| AOS_UL7_X8 | `betaflight_2025.12.5_STM32F7X2_MATEKF722HD_AOSUL7X8_custom_v10_slim.hex` |
-| Explorer LR4 | `betaflight_2025.12.5_STM32F7X2_JHEF7DUAL_EXPLORERLR4_custom_v10_slim.hex` |
-| Pavo25 V2 (CRSF, PINIO, **자력계 없음**, LED 없음) | `betaflight_2025.12.5_STM32F7X2_JHEF7DUAL_PAVO25V2_custom_v10_slim.hex` |
-| X8_5INCH | `betaflight_2025.12.5_STM32H743_MATEKH743_X8_5INCH_custom_v10_slim.hex` |
+| MARIO5 (CRSF, PINIO 유지) | `betaflight_2025.12.5_STM32F405_SPEEDYBEEF405V4_MARIO5_custom_v13_slim.hex` |
+| AOS_UL7_O4 (FPort, LED 스트립 제거) | `betaflight_2025.12.5_STM32F405_SPEEDYBEEF405V4_AOSUL7O4_custom_v13_slim.hex` |
+| Mark4_6in | `betaflight_2025.12.5_STM32F405_JHEF405PRO_MARK4_6IN_custom_v13_slim.hex` |
+| TJRC_10 | `betaflight_2025.12.5_STM32F7X2_MATEKF722SE_TJRC10_custom_v13_slim.hex` |
+| 8IN-KOPIS_X8 | `betaflight_2025.12.5_STM32F7X2_SPEEDYBEEF7V3_8INKOPISX8_custom_v13_slim.hex` |
+| CHIMERA7 | `betaflight_2025.12.5_STM32F7X2_FLYWOOF722PROV2_CHIMERA7_custom_v13_slim.hex` |
+| AOS_UL7_X8 | `betaflight_2025.12.5_STM32F7X2_MATEKF722HD_AOSUL7X8_custom_v13_slim.hex` |
+| Explorer LR4 | `betaflight_2025.12.5_STM32F7X2_JHEF7DUAL_EXPLORERLR4_custom_v13_slim.hex` |
+| Pavo25 V2 (CRSF, PINIO, **자력계 없음**, LED 없음) | `betaflight_2025.12.5_STM32F7X2_JHEF7DUAL_PAVO25V2_custom_v13_slim.hex` |
+| X8_5INCH | `betaflight_2025.12.5_STM32H743_MATEKH743_X8_5INCH_custom_v13_slim.hex` |
 
 보드가 다르면 잘못된 hex다. MARIO5와 AOS_UL7_O4는 같은 FC(SPEEDYBEEF405V4), Pavo25 V2와 Explorer LR4는 같은 FC(JHEF7DUAL)라서 파일명 라벨(MARIO5 / AOSUL7O4 / PAVO25V2 / EXPLORERLR4)까지 확인해야 한다. 파일명의 보드 이름이 기체 FC와 같은지 확인한 뒤 Betaflight Configurator의 **Load Firmware [Local]**로 올린다.
 
@@ -236,7 +242,7 @@ CLI 파라미터가 아니라 코드에 고정된 동작이다(PG 버전 변경 
 
 ## 6. 주의
 
-- F722 보드는 플래시 사용률이 73.6~79.0%다(v10 기준). 기능 추가 시 다시 확인한다.
+- F722 보드는 플래시 사용률이 73.6~79.0%다(v13 기준). 기능 추가 시 다시 확인한다.
 - `mixer_type = EZLANDING`이 켜져 있으면 Alt Hold 하강 제동에 영향을 줄 수 있으니 시험 전에 확인한다.
 - Pavo25 V2는 자력계가 없다 — Position Hold 동작(자력계 없이 헤딩 추정)을 벤치에서 먼저 확인한다. 이 기체의 CLI 덤프는 Betaflight 4.5.5 기준(오래됨)이니 플래시 전 최신 `diff all`로 재확인한다.
 - **MARIO5(CRSF)/AOS_UL7_O4(FPort)/X8_5INCH(FPort)는 수신기 프로토콜이 CLI로 확정되지 않는다** — CLI에 `serialrx_provider`가 없어 가정한 값이다(자세한 내용: [BUILD_OPTIONS.md](BUILD_OPTIONS.md) 주석 2). 틀리면 플래시 후 수신기가 바인드되지 않으니 벤치에서 먼저 확인한다.

@@ -106,7 +106,9 @@ jobs:
           for f in *.hex; do
             built=$(sha256sum "$f" | cut -d' ' -f1)
             ref=$(grep " $f\$" ../custom-patch/firmware/2025.12.5/SHA256SUMS.txt | cut -d' ' -f1 || true)
-            if [ "$built" = "$ref" ]; then r="MATCH"; else r="DIFFERENT (toolchain/compiler version dependent)"; fi
+            if [ -z "$ref" ]; then r="NO ENTRY in SHA256SUMS.txt (checksum list not updated for this version)"
+            elif [ "$built" = "$ref" ]; then r="MATCH"
+            else r="DIFFERENT (toolchain/compiler version dependent)"; fi
             echo "$f: $r"
             echo "- $f: $r" >> "$GITHUB_STEP_SUMMARY"
           done

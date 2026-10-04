@@ -4,7 +4,7 @@
 커스텀 패치(4종): `alt_hold_full_low_is_max_descend`, `alt_hold_deadband_low`, `alt_hold_hover_throttle`, `landing_disarm_airmode_off_only` (참고: betaflight/betaflight#15775)
 
 이 저장소의 펌웨어는 **보드별(`make <보드이름>`)** 로 빌드해서, 그 보드/기체가 실제로 쓰지 않는 기능을 빼 플래시 사용량을 줄였다(이전에 있던 통합 타겟(MCU 단위) hex는 제거되었다).
-결과 파일은 기체 이름이 들어간 hex(`..._custom_v12_slim.hex`)이며, **각 기체에 맞는 파일 하나만** 올려야 한다.
+결과 파일은 기체 이름이 들어간 hex(`..._custom_v13_slim.hex`)이며, **각 기체에 맞는 파일 하나만** 올려야 한다.
 
 **v4: 서보(USE_SERVOS)와 배터리-컨티뉴(USE_BATTERY_CONTINUE)를 전 기체에서 제거했고, OSD는 디지털(MSP DisplayPort 등, `USE_OSD_HD`)만 남기고 아날로그 OSD(`USE_OSD_SD`)와 MAX7456 드라이버(`USE_MAX7456`)를 제거했다.** 사용자 지시(2026-09): 이 저장소의 기체는 전부 디지털 VTX(Walksnail 등)만 쓰고 서보/아날로그 OSD를 쓰지 않음.
 
@@ -343,7 +343,7 @@ custom-patch/build_custom.sh
 custom-patch/build_custom.sh MATEKF722SE JHEF7DUAL
 ```
 
-결과는 `custom-patch/firmware/2025.12.5/`에 `betaflight_2025.12.5_<MCU>_<보드>_<기체>_custom_v12_slim.hex` 형식으로 생성된다.
+결과는 `custom-patch/firmware/2025.12.5/`에 `betaflight_2025.12.5_<MCU>_<보드>_<기체>_custom_v13_slim.hex` 형식으로 생성된다.
 
 ## 검증한 내용
 
@@ -391,3 +391,20 @@ custom-patch/build_custom.sh MATEKF722SE JHEF7DUAL
 **수정**: `src/main/flight/alt_hold_multirotor.c` `altHoldUpdateTargetAltitude()` — 착륙 보조가 상한을 낮춘 경우(`maxVelocity < altHold.maxVelocity`)에만, 목표 고도를 현재고도 ± (새 문턱 × 0.9) 안으로 끌어당긴다. 일반 Alt Hold 상한과 페일세이프에는 적용하지 않아 기존 동작 그대로다. CLI/PG 변경 없음. `build_custom.sh` 접미사 `custom_v11_slim` → `custom_v12_slim`.
 
 **검증**: `althold_unittest` 37개 통과(신규 3개: 5m 구간 오차 350/문턱 300 전환 후 스틱 상승 시 목표 이동, 1.8m 구간 동일, 비착륙(Airmode ON)에서는 기존 고착 동작 유지). 수정 전 코드에서는 신규 앞의 2개가 실패함을 확인. 전 기체 10대 slim 재빌드 성공, 경고/오류 없음, 플래시 F405 39.2~39.8%, F722 73.7~79.0%, H743 24.4%, hex 6종 문자열 모두 포함. 비행 시험은 하지 않았다.
+
+## v13 (2026-10-04): 교차 검증(GPT) 지적 반영 (CLI 파라미터 아님)
+
+GPT 교차 검증의 6건을 코드와 대조해 5건을 수정하고 1건은 조건부(현재 기체 해당 없음)로 문서화했다.
+
+| # | 지적 | 판정 | 조치 |
+|---|---|---|---|
+| 1 | 해제 대기 판정이 수신 처리 순서상(`processRxModes()` → `updateRcCommands()`) 이전 프레임의 `rcCommand[THROTTLE]`을 봄. 스위치 OFF와 스로틀 하강이 같은 프레임이면 이전 값(호버)으로 즉시 해제된 뒤 새 값으로 수동 전환 | **타당** | `rc.c`에 `getRcCommandThrottleFromRcData()`(최신 `rcData` 기준, `updateRcCommands()`와 같은 계산) 추가, `altHoldRequestActive()`의 해제/진입 판정을 이 값으로 변경 |
+| 2 | v12 목표 보정이 고도 유지·진입 래치·ALT WAIT 중에도 매 주기 실행되어 목표를 끌어내림(예: 목표 150, 고도 0 → 목표 121.5) | **타당** | 보정을 `stickFactor != 0`(스틱이 목표를 움직이는 중)일 때만 적용 |
+| 3 | 착륙 보조가 `gps_rescue_descend_rate`×2/×1로 교체하므로 `alt_hold_climb_rate`가 더 작으면 오히려 상한이 커짐 | **타당(설정 조건부; 70/135에서는 발생 안 함)** | 착륙 보조 상한을 `MIN(..., altHold.maxVelocity)`로 제한 |
+| 4 | 호버 구간에서 해제해도 `throttle_limit`(SCALE 등)이 있으면 수동 전환 순간 출력이 달라짐 | **조건부, 코드 변경 없음** | 10기 `diff all` 백업에 `throttle_limit_*` 설정 없음 확인. 해당 설정을 쓰게 되면 해제 시 출력 불연속 가능 — 알려진 한계로 기록 |
+| 5 | `SHA256SUMS.txt`가 v11 항목이고 CI는 항목 없음과 컴파일러 차이를 구별 못함 | **확인됨** | v13 10개로 `SHA256SUMS.txt` 재생성, CI 비교 단계에 `NO ENTRY` 구분 추가 |
+| 6 | README/릴리즈 업로드 설정에 v10 잔존 | **확인됨(일부)** | README 현재 버전·hex 파일명 표를 v13으로 갱신. `custom-release.yml`의 `TAG`(`v2025.12.5-custom-v10`)는 사용자가 만든 릴리즈 이름이라 변경하지 않음 — 새 릴리즈 생성 후 수정 필요(워크플로 파일 수정 시 push로 실행됨) |
+
+추가로 GPT가 짚은 테스트 공백(`osd_unittest`에 `USE_ALTITUDE_HOLD` 없음 → ALT WAIT 경고 분기 미검증, Alt Hold 테스트가 믹서·`throttle_limit`을 포함하지 않음)은 이번에 다루지 않았다.
+
+**검증**: `althold_unittest` 41개 통과. 신규 4개(같은 프레임 스위치 OFF+스로틀 하강 시 해제 안 됨, 새 프레임이 호버면 해제, 고도 유지 중 목표 보존, 착륙 상한이 climb_rate 초과 안 함)는 수정 전 코드에서 모두 실패함을 확인. 전 기체 10대 `_v13_slim` 재빌드 성공(경고/오류 없음, F405 39.3~39.8%, F722 73.7~79.1%, H743 24.4%), hex 6종 문자열 포함. 비행 시험은 하지 않았다.

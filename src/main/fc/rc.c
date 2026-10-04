@@ -693,6 +693,22 @@ FAST_CODE void processRcCommand(void)
     isRxDataNew = false;
 }
 
+// custom-patch (v13): the throttle command that updateRcCommands() WOULD compute from the newest rcData[THROTTLE].
+// processRxModes() (flight mode decisions) runs before updateRcCommands() in the RX task, so rcCommand[THROTTLE]
+// seen there is still the previous frame's value. Alt Hold's exit-hold decision needs the matching new value.
+float getRcCommandThrottleFromRcData(void)
+{
+    if (featureIsEnabled(FEATURE_3D)) {
+        return rcCommand[THROTTLE];   // Alt Hold is not used with 3D throttle; keep the last computed value
+    }
+    int32_t tmp = constrain(rcData[THROTTLE], rxConfig()->mincheck, PWM_RANGE_MAX);
+    tmp = (uint32_t)(tmp - rxConfig()->mincheck) * PWM_RANGE_MIN / (PWM_RANGE_MAX - rxConfig()->mincheck);
+    if (getLowVoltageCutoff()->enabled) {
+        tmp = tmp * getLowVoltageCutoff()->percentage / 100;
+    }
+    return rcLookupThrottle(tmp);
+}
+
 FAST_CODE_NOINLINE void updateRcCommands(void)
 {
     isRxDataNew = true;

@@ -48,6 +48,7 @@ float getRcDeflectionRaw(int axis);
 float getRcDeflectionAbs(int axis);
 float getMaxRcDeflectionAbs(void);
 void updateRcCommands(void);
+float getRcCommandThrottleFromRcData(void); // custom-patch (v13)
 void resetYawAxis(void);
 void initRcProcessing(void);
 bool isMotorsReversed(void);
