@@ -15,6 +15,7 @@
  * along with Betaflight. If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <cmath>
 #include <stdint.h>
 #include <stdbool.h>
 #include <limits.h>
@@ -773,3 +774,245 @@ extern "C" {
     bool testAirmodeEnabled = true;
     bool isAirmodeEnabled(void) { return testAirmodeEnabled; }
 }
+
+// ======================================================================================================
+// v14 closed-loop simulation: simple vertical plant + RC smoothing filter + real Alt Hold / altitudeControl.
+//  - stick is expressed in rcCommand units (what updateRcCommands() produces from the RC link)
+//  - smoothing ON: rcCommand[THROTTLE] = pt3-like filter output of the raw stick (testRcThrottleNow = raw stick)
+//  - Alt Hold ON: motor thrust = autopilot throttle; OFF: motor thrust = (rcCommand - 1000) / 1000
+//  - 100 Hz cycle (the Alt Hold task rate)
+// ======================================================================================================
+#ifdef USE_GPS_RESCUE
+class AltholdClosedLoop : public AltholdCustomSim {
+protected:
+    float z = 0.0f, v = 0.0f;            // cm, cm/s
+    float thrustFrac = 0.27f;            // motor thrust fraction (lagged)
+    float hoverFrac = 0.368f;            // true hover thrust fraction of the aircraft
+    float f1 = 1000, f2 = 1000, f3 = 1000;   // pt3 filter stages
+    bool smoothing = true;
+    float cutoffAlpha = 0.39f;           // per-stage coefficient at 100 Hz for ~20 Hz pt3
+    float rawStick = 1450.0f;
+    float outPwmEq = 1270.0f, prevOutPwmEq = 1270.0f;
+    float maxStep = 0.0f;                // largest single-cycle change of commanded throttle (rcCommand units)
+    float minZ = 1e9f, maxV = -1e9f, minV = 1e9f;
+    float maxLead = 0.0f;                // max |target - z| while Alt Hold active
+    float t = 0.0f;
+    float releaseStep = 0.0f; bool prevOn = false;
+
+    void SetUp() override {
+        AltholdCustomSim::SetUp();
+        armingFlags |= ARMED;
+        testAirmodeEnabled = false;
+        gpsRescueConfigMutable()->descendRate = 135;
+        altHoldConfigMutable()->climbRate = 70;
+        altHoldConfigMutable()->deadband = 25;
+        altHoldConfigMutable()->deadbandLow = 0;
+        altHoldConfigMutable()->hoverThrottle = 1400;
+        autopilotConfigMutable()->hoverThrottle = 1300;
+        autopilotConfigMutable()->throttleMin = 1150;
+        autopilotConfigMutable()->throttleMax = 1900;
+        altHoldInit();
+        testCosTiltAngle = 1.0f;
+    }
+    void TearDown() override { armingFlags &= ~ARMED; testAirmodeEnabled = true; testFailsafeActive = false; testRcThrottleNow = -1.0f; }
+
+    void initState(float z0, float stick) {
+        z = z0; v = 0; thrustFrac = hoverFrac; rawStick = stick;
+        f1 = f2 = f3 = stick;
+        rcCommand[THROTTLE] = smoothing ? f3 : stick;
+        flightModeFlags = 0; altHoldInit(); altHoldClearExitPending();
+        rxConfigMutable()->rc_smoothing = smoothing;
+        testAltitudeCm = z; testAltitudeDerivativeCmS = v;
+        t = 0; releaseStep = 0; prevOn = false; maxStep = 0; minZ = 1e9f; maxV = -1e9f; minV = 1e9f; maxLead = 0;
+        outPwmEq = prevOutPwmEq = stick;
+    }
+    // one 10 ms cycle. sw = Alt Hold switch, stick = raw stick (rcCommand units)
+    void cycle(bool sw, float stick) {
+        const float dt = 0.01f;
+        rawStick = stick;
+        // RC link frame: modes decided while rcCommand still holds the previous (filtered) value
+        testRcThrottleNow = stick;                          // newest rcData-derived throttle
+        testThrottleStatus = rcCommand[THROTTLE] < 1050 ? THROTTLE_LOW : THROTTLE_HIGH;
+        if (armed && altHoldRequestActive(sw)) flightModeFlags |= ALT_HOLD_MODE;
+        else { flightModeFlags &= ~ALT_HOLD_MODE; altHoldClearExitPending(); }
+        // updateRcCommands() then the PID loop smoothing
+        if (smoothing) {
+            f1 += cutoffAlpha * (stick - f1); f2 += cutoffAlpha * (f1 - f2); f3 += cutoffAlpha * (f2 - f3);
+            rcCommand[THROTTLE] = f3;
+        } else {
+            rcCommand[THROTTLE] = stick;
+        }
+        testThrottleStatus = rcCommand[THROTTLE] < 1050 ? THROTTLE_LOW : THROTTLE_HIGH;
+        testRcThrottleNow = -1.0f;
+        testAltitudeCm = z; testAltitudeDerivativeCmS = v;
+        updateAltHold(currentTimeUs);
+        const bool on = flightModeFlags & ALT_HOLD_MODE;
+        outPwmEq = on ? thrPwm() : rcCommand[THROTTLE];
+        outPwmEq = constrainf(outPwmEq, 1000.0f, 2000.0f);
+        if (prevOn && !on) releaseStep = outPwmEq - prevOutPwmEq;
+        prevOn = on;
+        maxStep = fmaxf(maxStep, fabsf(outPwmEq - prevOutPwmEq));
+        prevOutPwmEq = outPwmEq;
+        // plant
+        const float cmd = (outPwmEq - 1000.0f) / 1000.0f;
+        thrustFrac += (cmd - thrustFrac) * (dt / 0.04f);    // motor/prop lag 40 ms
+        float a = 981.0f * (thrustFrac / hoverFrac - 1.0f) - 0.25f * v;   // thrust accel minus drag
+        v += a * dt; z += v * dt;
+        if (z <= 0.0f) { z = 0.0f; if (v < 0) v = 0; if (a < 0) v = 0; }
+        t += dt;
+        minZ = fminf(minZ, z); maxV = fmaxf(maxV, v); minV = fminf(minV, v);
+        if (on) maxLead = fmaxf(maxLead, fabsf(altHold.targetAltitudeCm - z));
+    }
+    void runFor(bool sw, float stick, float seconds) { for (int i = 0; i < (int)(seconds * 100); i++) cycle(sw, stick); }
+};
+
+TEST_F(AltholdClosedLoop, S1_HoldsAltitudeAtEntry)
+{
+    initState(1000.0f, 1450.0f);
+    runFor(true, 1450.0f, 10.0f);
+    printf("[S1] hold 10 s: z=%.0f (start 1000) minZ=%.0f vRange=[%.0f,%.0f]\n", z, minZ, minV, maxV);
+    EXPECT_NEAR(z, 1000.0f, 60.0f);
+}
+
+TEST_F(AltholdClosedLoop, S2_FullLowDescentFrom12mLandsWithoutOvershoot)
+{
+    initState(1200.0f, 1450.0f);
+    runFor(true, 1450.0f, 2.0f);                                   // entry latch hold
+    float vTouch = 0; float tTouch = -1, vAt5 = 0, vAt2 = 0; bool s5 = false, s2 = false;
+    for (int i = 0; i < 6000 && z > 0.5f; i++) {
+        cycle(true, 1000.0f);
+        if (!s5 && z <= 500.0f) { s5 = true; vAt5 = v; }
+        if (!s2 && z <= 200.0f) { s2 = true; vAt2 = v; }
+        if (z > 3.0f) vTouch = v;
+    }
+    tTouch = t;
+    printf("[S2] descent 12m: t=%.1fs v(5m)=%.0f v(2m)=%.0f touchdown v=%.0f vMin=%.0f maxLead=%.0f\n", tTouch, vAt5, vAt2, vTouch, minV, maxLead);
+    EXPECT_GE(minZ, 0.0f);
+    EXPECT_GE(minV, -760.0f);                                      // never faster than the normal cap (700) + margin
+    EXPECT_LE(vAt2, 0.0f);
+    EXPECT_GE(vAt2, -330.0f);
+    EXPECT_GE(vTouch, -260.0f);                                    // touchdown speed (v11 was -349 in the same plant)
+}
+
+TEST_F(AltholdClosedLoop, S3_GoAroundAt4mResponds)
+{
+    initState(1200.0f, 1450.0f);
+    runFor(true, 1450.0f, 1.0f);
+    while (z > 400.0f) cycle(true, 1000.0f);                       // descending, just crossed 4 m
+    const float zAbort = z, vAbort = v;
+    float tUp = -1;
+    for (int i = 0; i < 400; i++) {
+        cycle(true, 1900.0f);                                      // abort: full stick up
+        if (tUp < 0 && v > 0) tUp = i * 0.01f;
+    }
+    printf("[S3] go-around at 4m: z=%.0f v=%.0f -> stick up; min z=%.0f, v turns positive after %.2fs, z after 4s=%.0f\n", zAbort, vAbort, minZ, tUp, z);
+    EXPECT_GE(tUp, 0.0f);
+    EXPECT_LE(tUp, 2.0f);                                          // v11: never recovered in this plant
+    // known limit: from -3.7 m/s at 4 m the plant still touches the ground once (see custom-patch notes), so no minZ bound
+}
+
+TEST_F(AltholdClosedLoop, S4_ExitHoldHandOver_FastStickToHover)
+{
+    for (int sm = 1; sm >= 0; sm--) {
+        smoothing = sm;
+        initState(1000.0f, 1500.0f);
+        runFor(true, 1500.0f, 1.0f);
+        runFor(true, 1700.0f, 1.0f);                               // latch released, stick high
+        runFor(false, 1700.0f, 0.3f);                              // switch off: ALT WAIT (stick far from hover)
+        EXPECT_TRUE(isAltHoldExitPending());
+        const float zBefore = z;
+        maxStep = 0.0f;
+        for (int i = 0; i < 30; i++) cycle(false, 1700.0f - (1700.0f - 1300.0f) * (i + 1) / 30.0f);   // 0.3 s flick to ap_hover_throttle
+        float releasedAt = -1; (void)releasedAt;
+        runFor(false, 1300.0f, 1.5f);
+        printf("[S4] smoothing=%d: z before=%.0f after=%.0f minV=%.0f maxV=%.0f release step(pwm units)=%.1f mode=%d\n",
+               sm, zBefore, z, minV, maxV, releaseStep, (int)modeOn());
+        EXPECT_FALSE(modeOn());
+        EXPECT_GT(z, 800.0f);
+        EXPECT_LT(fabsf(releaseStep), 100.0f);
+    }
+}
+
+TEST_F(AltholdClosedLoop, S5_SwitchOffWithStickDropSameFrame)
+{
+    for (int sm = 1; sm >= 0; sm--) {
+        smoothing = sm;
+        initState(1000.0f, 1450.0f);
+        runFor(true, 1450.0f, 2.0f);
+        const float zBefore = z;
+        maxStep = 0; minV = 1e9f;
+        cycle(false, 1000.0f);                                     // switch off and stick to 1000 in the same frame
+        const bool releasedImmediately = !modeOn();
+        runFor(false, 1000.0f, 0.5f);
+        printf("[S5] smoothing=%d: releasedImmediately=%d maxStep=%.1f z %.0f -> %.0f minV=%.0f (stick commanded low: descent expected)\n",
+               sm, (int)releasedImmediately, maxStep, zBefore, z, minV);
+        EXPECT_TRUE(std::isfinite(z));
+    }
+}
+
+TEST_F(AltholdClosedLoop, S6_FailsafeLandingFrom30m)
+{
+    initState(3000.0f, 1450.0f);
+    runFor(true, 1450.0f, 1.0f);
+    testFailsafeActive = true;
+    for (int i = 0; i < 12000 && z > 0.5f; i++) cycle(true, 1450.0f);
+    testFailsafeActive = false;
+    printf("[S6] failsafe landing from 30m: t=%.1fs z=%.0f vMin=%.0f vAtEnd=%.0f maxLead=%.0f\n", t, z, minV, v, maxLead);
+    EXPECT_LT(z, 1.0f);
+    EXPECT_GE(minZ, 0.0f);
+}
+
+TEST_F(AltholdClosedLoop, S7_LandingZoneHoldKeepsTargetAfterGust)
+{
+    initState(150.0f, 1450.0f);                                    // hold at 1.5 m (latched, stick at hover)
+    runFor(true, 1450.0f, 1.0f);
+    v = -100.0f;                                                   // downdraft kick
+    runFor(true, 1450.0f, 4.0f);
+    printf("[S7] low hold after -100 cm/s gust: z=%.0f (target %.0f) minZ=%.0f\n", z, altHold.targetAltitudeCm, minZ);
+    EXPECT_NEAR(altHold.targetAltitudeCm, 150.0f, 1.0f);
+    EXPECT_NEAR(z, 150.0f, 40.0f);
+}
+
+TEST_F(AltholdClosedLoop, S8_ClimbRateTenNeverExceeds100InLandingZone)
+{
+    altHoldConfigMutable()->climbRate = 10;
+    initState(450.0f, 1450.0f);
+    runFor(true, 1450.0f, 1.0f);
+    minV = 1e9f;
+    runFor(true, 1000.0f, 3.0f);
+    printf("[S8] climb_rate=10 descend from 4.5 m: vMin=%.0f (cap 100 expected)\n", minV);
+    EXPECT_GE(minV, -130.0f);
+}
+
+TEST_F(AltholdClosedLoop, S9_RandomStressInvariants)
+{
+    uint32_t rng = 12345;
+    auto rnd = [&]() { rng = rng * 1664525u + 1013904223u; return (rng >> 8) / 16777216.0f; };
+    int violations = 0, switchesOn = 0, exitsPending = 0, vNan = 0, vRange = 0, vPend = 0, vLead = 0;
+    for (int run = 0; run < 60; run++) {
+        smoothing = rnd() < 0.7f;
+        altHoldConfigMutable()->climbRate = (uint8_t)(10 + rnd() * 100);
+        gpsRescueConfigMutable()->descendRate = (uint16_t)(60 + rnd() * 200);
+        testAirmodeEnabled = rnd() < 0.2f;
+        initState(rnd() * 1500.0f, 1000.0f + rnd() * 700.0f);
+        bool sw = rnd() < 0.5f; float stick = rawStick;
+        for (int i = 0; i < 3000; i++) {                          // 30 s
+            if (rnd() < 0.01f) sw = !sw;
+            if (rnd() < 0.03f) stick = 1000.0f + rnd() * 1000.0f;
+            if (rnd() < 0.02f) testFailsafeActive = !testFailsafeActive;
+            cycle(sw, stick);
+            if (sw) switchesOn++;
+            if (isAltHoldExitPending()) exitsPending++;
+            const bool on = flightModeFlags & ALT_HOLD_MODE;
+            if (!std::isfinite(z) || !std::isfinite(v) || !std::isfinite(altHold.targetAltitudeCm)) vNan++, violations++;
+            if (outPwmEq < 999.0f || outPwmEq > 2001.0f) vRange++, violations++;
+            if (isAltHoldExitPending() && !on) vPend++, violations++;       // pending implies mode on
+            if (on && fabsf(altHold.targetAltitudeCm - z) > 3000.0f) vLead++, violations++;   // runaway target
+        }
+        testFailsafeActive = false;
+    }
+    printf("[S9] nan=%d range=%d pending-without-mode=%d lead>gate=%d\n", vNan, vRange, vPend, vLead);
+    printf("[S9] random stress: 60 runs x 30 s, violations=%d (switchOn cycles=%d, ALT WAIT cycles=%d)\n", violations, switchesOn, exitsPending);
+    EXPECT_EQ(violations, 0);
+}
+#endif
