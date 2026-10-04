@@ -4,7 +4,7 @@
 커스텀 패치(4종): `alt_hold_full_low_is_max_descend`, `alt_hold_deadband_low`, `alt_hold_hover_throttle`, `landing_disarm_airmode_off_only` (참고: betaflight/betaflight#15775)
 
 이 저장소의 펌웨어는 **보드별(`make <보드이름>`)** 로 빌드해서, 그 보드/기체가 실제로 쓰지 않는 기능을 빼 플래시 사용량을 줄였다(이전에 있던 통합 타겟(MCU 단위) hex는 제거되었다).
-결과 파일은 기체 이름이 들어간 hex(`..._custom_v15_slim.hex`)이며, **각 기체에 맞는 파일 하나만** 올려야 한다.
+결과 파일은 기체 이름이 들어간 hex(`..._custom_v16_slim.hex`)이며, **각 기체에 맞는 파일 하나만** 올려야 한다.
 
 **v4: 서보(USE_SERVOS)와 배터리-컨티뉴(USE_BATTERY_CONTINUE)를 전 기체에서 제거했고, OSD는 디지털(MSP DisplayPort 등, `USE_OSD_HD`)만 남기고 아날로그 OSD(`USE_OSD_SD`)와 MAX7456 드라이버(`USE_MAX7456`)를 제거했다.** 사용자 지시(2026-09): 이 저장소의 기체는 전부 디지털 VTX(Walksnail 등)만 쓰고 서보/아날로그 OSD를 쓰지 않음.
 
@@ -343,7 +343,7 @@ custom-patch/build_custom.sh
 custom-patch/build_custom.sh MATEKF722SE JHEF7DUAL
 ```
 
-결과는 `custom-patch/firmware/2025.12.5/`에 `betaflight_2025.12.5_<MCU>_<보드>_<기체>_custom_v15_slim.hex` 형식으로 생성된다.
+결과는 `custom-patch/firmware/2025.12.5/`에 `betaflight_2025.12.5_<MCU>_<보드>_<기체>_custom_v16_slim.hex` 형식으로 생성된다.
 
 ## 검증한 내용
 
@@ -452,3 +452,14 @@ v14 전체를 정적 재검토하고 폐루프 시뮬레이션(수직 운동 모
 - **전체 코드 재검토**: `git diff 2025.12.5 HEAD`의 `src/main` 21개 파일을 다시 확인. 펌웨어 코드 결함은 추가로 발견되지 않았다. v15 커밋(`00fb678df`) 이후 `src/main`·`build_custom.sh` 변경은 없어 배포 hex는 현재 소스와 같다.
 - **재빌드 대조**: 같은 소스로 MARIO5를 다시 빌드해 배포 hex와 바이트 단위로 비교하니 26바이트만 달랐고, 모두 빌드 날짜·시각 문자열과 git 리비전 문자열이다. 그래서 같은 소스라도 빌드할 때마다 SHA256이 달라진다 — `SHA256SUMS.txt`는 "배포된 파일의 무결성 확인용"이지 "다시 빌드하면 같은 값이 나온다"는 뜻이 아니다(CI 비교 단계도 참고용).
 - **전체 유닛테스트**: 호스트 `make test` 46개 스위트 전부 통과. 점검 중 `pid_unittest`가 링크 실패하는 것을 발견했다 — `pid.c`가 `landing_disarm_airmode_off_only` 때문에 `isAirmodeEnabled()`를 참조하는데 해당 시험에 대체 함수가 없었음(펌웨어 문제 아님, 시험 보강 누락). `pid_unittest.cc`에 대체 함수를 추가해 16개 통과.
+
+## v16 (2026-10-04): UART 수신 DMA 오타 2건 수정 — 교차 검증 5차 (CLI 파라미터 아님)
+
+| # | 지적 | 판정 | 조치 |
+|---|---|---|---|
+| 1 | `serial_uart_hw.c` 248행: 수신 DMA 선택에 `cfg->txDmaopt` 전달(`rxDmaopt` 확인 후) | **확인됨** (업스트림 2025.12.5 원본 오타, `src/platform`은 우리 패치와 차이 없음) | `cfg->rxDmaopt`로 수정 |
+| 2 | `serial_uart_hal.c` 167행(H7/G4): 수신 DMA 초기화가 `txDMAHandle.Init.Request`에 기록 | **확인됨** (원본 오타). 수정 전에는 `rxDMAHandle.Init.Request`가 0으로 남아 수신 DMA를 켜면 요청이 잘못 설정됨 | `rxDMAHandle.Init.Request`로 수정 |
+
+**영향 범위**: `UARTx_RX_DMA_OPT` 기본값은 `DMA_OPT_UNUSED`(`common_defaults_post.h`)이고 `UARTx_RX_DMA_STREAM`도 기본 NULL이며, 10개 기체 `diff all`에 `dma` 설정이 없다 → 현재 기체에서는 발동하지 않는 잠재 결함. 수신 DMA를 CLI(`dma`)로 직접 켠 경우에만 영향(H743 X8_5INCH 포함). 기본 동작 변화 없음. 같은 유형의 `APM32` 쪽 한 줄(`serial_uart_apm32.c` 89행, `txDMAHandle.Init.Channel = rxDMAChannel`)은 이 기체들이 쓰지 않는 플랫폼이라 수정하지 않았다.
+
+**검증**: 코드 외 변경 없음, 호스트 유닛테스트는 해당 코드를 포함하지 않아 영향 없음(전체 46개 스위트 통과 유지). 10개 보드 `custom_v16_slim` 재빌드, 체크섬은 `SHA256SUMS.txt`.

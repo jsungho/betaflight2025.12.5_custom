@@ -24,7 +24,9 @@
 
 **v14: RC 스무딩과 입력 기준 정리(교차 검증 2차).** v13의 최신 프레임 스로틀(`rcData` 기준)은 RC 스무딩 필터를 거치지 않아, 스무딩 ON(기본)일 때 기준이 어긋났다. (1) 해제 대기 해제 판정: 스무딩 ON이면 믹서가 해제 직후 실제로 쓰는 필터 출력(`rcCommand[THROTTLE]`)이 호버에 들어왔을 때만 해제(빠른 스틱 조작 시 필터가 따라오는 동안의 순간 저하 방지), OFF이면 최신 프레임 값 사용. (2) 진입 래치: 캡처와 비교를 항상 같은 `rcData` 기준 값으로 통일해, 스틱을 가만히 둬도 필터가 따라오는 동안 래치가 저절로 풀리던 문제 제거. (3) 문서 정정: `ap_hover_throttle`은 CLI로 0 설정 불가(1100~1700) — 0일 때 캡처 동작은 방어용 폴백임을 명시. CLI 항목 없음, PG 버전 변경 없음. 유닛테스트 44개.
 
-**v15(현재): 해제 대기 기준의 단위 정렬(전체 재분석 시뮬레이션 결과).** 해제 대기의 기준값 `ap_hover_throttle`은 PWM 값(`min_check` 기준 정규화)인데 비교 대상 `rcCommand[THROTTLE]`은 이미 `min_check`로 1000~2000으로 재매핑된 값이라 단위가 달라, 실제로는 호버 추력보다 약 14% 높은 스틱 위치(예: `ap_hover_throttle` 1300, `min_check` 1050이면 1300 대신 약 1263)에서 해제돼야 하는데 1300 근처에서 해제되던 문제를 수정했다. 이제 `ap_hover_throttle`을 `rcCommand` 단위로 변환해 ±5% 구간과 가로지름 판정을 한다(`min_check`가 다르면 중심도 따라 바뀜). 기준값 자체는 그대로 `ap_hover_throttle`이다. CLI 항목 없음, PG 버전 변경 없음. 유닛테스트 56개(폐루프 시뮬레이션 10개 포함, 호스트 전체 46개 스위트 통과, 시뮬레이션 결과는 BUILD_OPTIONS.md v15절).
+**v15: 해제 대기 기준의 단위 정렬(전체 재분석 시뮬레이션 결과).** 해제 대기의 기준값 `ap_hover_throttle`은 PWM 값(`min_check` 기준 정규화)인데 비교 대상 `rcCommand[THROTTLE]`은 이미 `min_check`로 1000~2000으로 재매핑된 값이라 단위가 달라, 실제로는 호버 추력보다 약 14% 높은 스틱 위치(예: `ap_hover_throttle` 1300, `min_check` 1050이면 1300 대신 약 1263)에서 해제돼야 하는데 1300 근처에서 해제되던 문제를 수정했다. 이제 `ap_hover_throttle`을 `rcCommand` 단위로 변환해 ±5% 구간과 가로지름 판정을 한다(`min_check`가 다르면 중심도 따라 바뀜). 기준값 자체는 그대로 `ap_hover_throttle`이다. CLI 항목 없음, PG 버전 변경 없음. 유닛테스트 56개(폐루프 시뮬레이션 10개 포함, 호스트 전체 46개 스위트 통과, 시뮬레이션 결과는 BUILD_OPTIONS.md v15절).
+
+**v16(현재): UART 수신 DMA 오타 2건 수정(교차 검증 5차).** 업스트림 2025.12.5 원본에 있던 오타로 우리 패치와는 무관하다. (1) `serial_uart_hw.c`: 수신 DMA 채널을 고를 때 `rxDmaopt` 대신 `txDmaopt`를 넘기던 것. (2) `serial_uart_hal.c`(H7/G4): 수신 DMA 초기화에서 `rxDMAHandle.Init.Request` 대신 `txDMAHandle.Init.Request`에 값을 넣던 것. **영향 범위**: UART DMA 기본값은 전부 미사용(`DMA_OPT_UNUSED`)이고 10개 기체 CLI에도 `dma` 설정이 없어 현재 기체에서는 발동하지 않던 잠재 결함이다(수신 DMA를 CLI로 직접 켠 경우에만 해당, H743 X8_5INCH 포함). 수정은 오타 교정 2줄이라 기본 동작은 그대로다. CLI 항목 없음, PG 버전 변경 없음.
 
 - 브랜치: `custom-patch/alt-hold-throttle-range`
 - 참고 이슈: betaflight/betaflight#15775
@@ -38,16 +40,16 @@
 
 | 기체 | 파일 |
 |---|---|
-| MARIO5 (CRSF, PINIO 유지) | `betaflight_2025.12.5_STM32F405_SPEEDYBEEF405V4_MARIO5_custom_v15_slim.hex` |
-| AOS_UL7_O4 (FPort, LED 스트립 제거) | `betaflight_2025.12.5_STM32F405_SPEEDYBEEF405V4_AOSUL7O4_custom_v15_slim.hex` |
-| Mark4_6in | `betaflight_2025.12.5_STM32F405_JHEF405PRO_MARK4_6IN_custom_v15_slim.hex` |
-| TJRC_10 | `betaflight_2025.12.5_STM32F7X2_MATEKF722SE_TJRC10_custom_v15_slim.hex` |
-| 8IN-KOPIS_X8 | `betaflight_2025.12.5_STM32F7X2_SPEEDYBEEF7V3_8INKOPISX8_custom_v15_slim.hex` |
-| CHIMERA7 | `betaflight_2025.12.5_STM32F7X2_FLYWOOF722PROV2_CHIMERA7_custom_v15_slim.hex` |
-| AOS_UL7_X8 | `betaflight_2025.12.5_STM32F7X2_MATEKF722HD_AOSUL7X8_custom_v15_slim.hex` |
-| Explorer LR4 | `betaflight_2025.12.5_STM32F7X2_JHEF7DUAL_EXPLORERLR4_custom_v15_slim.hex` |
-| Pavo25 V2 (CRSF, PINIO, **자력계 없음**, LED 없음) | `betaflight_2025.12.5_STM32F7X2_JHEF7DUAL_PAVO25V2_custom_v15_slim.hex` |
-| X8_5INCH | `betaflight_2025.12.5_STM32H743_MATEKH743_X8_5INCH_custom_v15_slim.hex` |
+| MARIO5 (CRSF, PINIO 유지) | `betaflight_2025.12.5_STM32F405_SPEEDYBEEF405V4_MARIO5_custom_v16_slim.hex` |
+| AOS_UL7_O4 (FPort, LED 스트립 제거) | `betaflight_2025.12.5_STM32F405_SPEEDYBEEF405V4_AOSUL7O4_custom_v16_slim.hex` |
+| Mark4_6in | `betaflight_2025.12.5_STM32F405_JHEF405PRO_MARK4_6IN_custom_v16_slim.hex` |
+| TJRC_10 | `betaflight_2025.12.5_STM32F7X2_MATEKF722SE_TJRC10_custom_v16_slim.hex` |
+| 8IN-KOPIS_X8 | `betaflight_2025.12.5_STM32F7X2_SPEEDYBEEF7V3_8INKOPISX8_custom_v16_slim.hex` |
+| CHIMERA7 | `betaflight_2025.12.5_STM32F7X2_FLYWOOF722PROV2_CHIMERA7_custom_v16_slim.hex` |
+| AOS_UL7_X8 | `betaflight_2025.12.5_STM32F7X2_MATEKF722HD_AOSUL7X8_custom_v16_slim.hex` |
+| Explorer LR4 | `betaflight_2025.12.5_STM32F7X2_JHEF7DUAL_EXPLORERLR4_custom_v16_slim.hex` |
+| Pavo25 V2 (CRSF, PINIO, **자력계 없음**, LED 없음) | `betaflight_2025.12.5_STM32F7X2_JHEF7DUAL_PAVO25V2_custom_v16_slim.hex` |
+| X8_5INCH | `betaflight_2025.12.5_STM32H743_MATEKH743_X8_5INCH_custom_v16_slim.hex` |
 
 보드가 다르면 잘못된 hex다. MARIO5와 AOS_UL7_O4는 같은 FC(SPEEDYBEEF405V4), Pavo25 V2와 Explorer LR4는 같은 FC(JHEF7DUAL)라서 파일명 라벨(MARIO5 / AOSUL7O4 / PAVO25V2 / EXPLORERLR4)까지 확인해야 한다. 파일명의 보드 이름이 기체 FC와 같은지 확인한 뒤 Betaflight Configurator의 **Load Firmware [Local]**로 올린다.
 
@@ -251,7 +253,7 @@ CLI 파라미터가 아니라 코드에 고정된 동작이다(PG 버전 변경 
 
 ## 6. 주의
 
-- F722 보드는 플래시 사용률이 73.6~79.0%다(v15 기준). 기능 추가 시 다시 확인한다.
+- F722 보드는 플래시 사용률이 73.6~79.0%다(v16 기준). 기능 추가 시 다시 확인한다.
 - `mixer_type = EZLANDING`이 켜져 있으면 Alt Hold 하강 제동에 영향을 줄 수 있으니 시험 전에 확인한다.
 - Pavo25 V2는 자력계가 없다 — Position Hold 동작(자력계 없이 헤딩 추정)을 벤치에서 먼저 확인한다. 이 기체의 CLI 덤프는 Betaflight 4.5.5 기준(오래됨)이니 플래시 전 최신 `diff all`로 재확인한다.
 - **MARIO5(CRSF)/AOS_UL7_O4(FPort)/X8_5INCH(FPort)는 수신기 프로토콜이 CLI로 확정되지 않는다** — CLI에 `serialrx_provider`가 없어 가정한 값이다(자세한 내용: [BUILD_OPTIONS.md](BUILD_OPTIONS.md) 주석 2). 틀리면 플래시 후 수신기가 바인드되지 않으니 벤치에서 먼저 확인한다.
