@@ -231,11 +231,33 @@ TEST_F(AltholdCustomSim, ExitHoldKeepsAltitudeUntilStickReachesApHoverBand)
     run(false, 1150, 200);
     EXPECT_TRUE(modeOn());
     EXPECT_GT(thrPwm(), 1350.0f);   // altitude still held, not following stick
-    run(false, 1240, 10);              // 1240 < 1250: just outside band
+    run(false, 1200, 10);              // v15: band centre is ap_hover in rcCommand units (1300 -> 1263), band 1213..1313
     EXPECT_TRUE(modeOn());
-    run(false, 1255, 1);               // inside 1300 +/- 50
+    run(false, 1215, 1);               // inside the band
     EXPECT_FALSE(modeOn());
     EXPECT_FALSE(isAltHoldExitPending());
+}
+
+// v15: ap_hover_throttle (PWM, normalised with min_check) is converted to the rcCommand scale before the band check
+TEST_F(AltholdCustomSim, ExitBandCentreIsApHoverConvertedToRcCommandScale)
+{
+    run(true, 1400, 100);
+    run(false, 1600, 1);               // far above
+    run(false, 1320, 5);               // 1320 > 1263 + 50: outside (would be inside if compared to raw 1300)
+    EXPECT_TRUE(modeOn());
+    run(false, 1310, 1);               // inside 1263 + 50
+    EXPECT_FALSE(modeOn());
+}
+
+TEST_F(AltholdCustomSim, ExitBandCentreFollowsMinCheck)
+{
+    rxConfigMutable()->mincheck = 1100;                // 1300 -> 1000 + 1000 * 200 / 900 = 1222
+    run(true, 1400, 100);
+    run(false, 1600, 1);
+    run(false, 1280, 5);               // 1280 > 1222 + 50
+    EXPECT_TRUE(modeOn());
+    run(false, 1270, 1);               // inside
+    EXPECT_FALSE(modeOn());
 }
 
 TEST_F(AltholdCustomSim, ExitHoldUsesApHoverNotAltHoldHover)
@@ -915,6 +937,9 @@ TEST_F(AltholdClosedLoop, S4_ExitHoldHandOver_FastStickToHover)
 {
     for (int sm = 1; sm >= 0; sm--) {
         smoothing = sm;
+        hoverFrac = 0.263f;                                        // real hover == ap_hover_throttle (1300)
+        altHoldConfigMutable()->hoverThrottle = 0;                 // Alt Hold feed-forward = ap_hover_throttle too
+        altHoldInit();
         initState(1000.0f, 1500.0f);
         runFor(true, 1500.0f, 1.0f);
         runFor(true, 1700.0f, 1.0f);                               // latch released, stick high
@@ -922,9 +947,9 @@ TEST_F(AltholdClosedLoop, S4_ExitHoldHandOver_FastStickToHover)
         EXPECT_TRUE(isAltHoldExitPending());
         const float zBefore = z;
         maxStep = 0.0f;
-        for (int i = 0; i < 30; i++) cycle(false, 1700.0f - (1700.0f - 1300.0f) * (i + 1) / 30.0f);   // 0.3 s flick to ap_hover_throttle
+        for (int i = 0; i < 30; i++) cycle(false, 1700.0f - (1700.0f - 1263.0f) * (i + 1) / 30.0f);   // 0.3 s flick to ap_hover_throttle
         float releasedAt = -1; (void)releasedAt;
-        runFor(false, 1300.0f, 1.5f);
+        runFor(false, 1263.0f, 1.5f);
         printf("[S4] smoothing=%d: z before=%.0f after=%.0f minV=%.0f maxV=%.0f release step(pwm units)=%.1f mode=%d\n",
                sm, zBefore, z, minV, maxV, releaseStep, (int)modeOn());
         EXPECT_FALSE(modeOn());

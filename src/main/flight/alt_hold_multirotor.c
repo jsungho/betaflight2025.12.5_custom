@@ -392,11 +392,17 @@ bool altHoldRequestActive(bool switchOn)
         const float hoverPwm = apHover != 0 ? (float)apHover
             : altHoldCapturedHoverPwm != 0 ? (float)altHoldCapturedHoverPwm
             : altHoldOverrideHoverPwm != 0 ? (float)altHoldOverrideHoverPwm : (float)AP_HOVER_THROTTLE_DEFAULT;
-        const float prevDelta = altHold.exitPrevThrottle - hoverPwm;
+        // v15: rcCommand[THROTTLE] is already remapped to 1000..2000 through min_check, while ap_hover_throttle is a PWM
+        // value normalised with (pwm - min_check) / (2000 - min_check) by altitudeControl(). Convert the hover value to
+        // the rcCommand scale so the release happens at the same thrust the autopilot was holding (e.g. 1300 -> ~1263
+        // at min_check 1050); comparing them directly released ~37 PWM (about 14% thrust) too high.
+        const float mincheck = (float)MAX(rxConfig()->mincheck, PWM_RANGE_MIN);
+        const float hoverRc = PWM_RANGE_MIN + PWM_RANGE_MIN * constrainf((hoverPwm - mincheck) / (PWM_RANGE_MAX - mincheck), 0.0f, 1.0f);
+        const float prevDelta = altHold.exitPrevThrottle - hoverRc;
         // v13/v14: this runs from processRxModes(), before updateRcCommands() refreshes rcCommand[THROTTLE]; judge the
         // release on the value the manual throttle will actually use right after release (see altHoldExitThrottle())
         const float throttleNow = altHoldExitThrottle();
-        const float delta = throttleNow - hoverPwm;
+        const float delta = throttleNow - hoverRc;
         altHold.exitPrevThrottle = throttleNow;
         // custom-patch: release when the stick is inside the band, or has crossed hover since the last sample
         // (a fast stick flick can jump clean over the +/-5% band between two samples, skipping it entirely)
