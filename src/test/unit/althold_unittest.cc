@@ -993,11 +993,16 @@ TEST_F(AltholdClosedLoop, S5_SwitchOffWithStickDropSameFrame)
             EXPECT_FALSE(isAltHoldExitPending());
             EXPECT_FALSE(modeOn());
             EXPECT_LT(z, zBefore - 5.0f);
+            // release happens when the filtered stick crosses hover; the step is bounded by one filter sample past hover plus
+            // the hold-to-hover offset (observed about -64 PWM)
+            EXPECT_LT(fabsf(releaseStep), 100.0f);
+            EXPECT_LT(releaseStep, 0.0f);                          // the stick was commanded down
         } else {
             // smoothing OFF: raw stick is already far below hover on the switch-off frame -> ALT WAIT keeps holding the altitude
             EXPECT_FALSE(releasedImmediately);
             EXPECT_TRUE(isAltHoldExitPending());
             EXPECT_TRUE(modeOn());
+            EXPECT_EQ(releaseStep, 0.0f);                          // never released
             EXPECT_LT(maxStep, 5.0f);
             EXPECT_NEAR(z, zBefore, 40.0f);
         }
@@ -1028,15 +1033,26 @@ TEST_F(AltholdClosedLoop, S6_FailsafeLandingFrom30m_SwitchOff)
 
 TEST_F(AltholdClosedLoop, S6b_FailsafeEndsWhileSwitchTurnedOffDuringIt)
 {
-    initState(2000.0f, 1450.0f);
-    runFor(true, 1450.0f, 1.0f);                                   // pilot Alt Hold
-    testFailsafeActive = true;
-    runFor(false, 1000.0f, 0.5f);                                  // switch off during failsafe, stick low: ALT WAIT pending, held by failsafe
-    EXPECT_TRUE(modeOn());
-    testFailsafeActive = false;                                    // failsafe ends: no switch, stick far from hover
-    cycle(false, 1000.0f);
-    printf("[S6b] failsafe ended after switch off: mode=%d pending=%d\n", (int)modeOn(), (int)isAltHoldExitPending());
-    EXPECT_EQ(modeOn(), isAltHoldExitPending());                   // never "pending" without the mode (and vice versa)
+    for (int sm = 1; sm >= 0; sm--) {
+        smoothing = sm;
+        initState(2000.0f, 1450.0f);
+        runFor(true, 1450.0f, 1.0f);                               // pilot Alt Hold
+        testFailsafeActive = true;
+        runFor(false, 1000.0f, 0.5f);                              // switch off during failsafe, stick low
+        EXPECT_TRUE(modeOn());                                     // held by failsafe
+        testFailsafeActive = false;                                // failsafe ends: switch off, stick low
+        cycle(false, 1000.0f);
+        printf("[S6b] smoothing=%d failsafe ended after switch off: mode=%d pending=%d\n", sm, (int)modeOn(), (int)isAltHoldExitPending());
+        if (sm) {
+            // the filtered stick already crossed hover during the 0.5 s: ALT WAIT was released before failsafe ended
+            EXPECT_FALSE(modeOn());
+            EXPECT_FALSE(isAltHoldExitPending());
+        } else {
+            // raw stick never came back to hover: ALT WAIT is still pending and keeps holding after failsafe ends
+            EXPECT_TRUE(modeOn());
+            EXPECT_TRUE(isAltHoldExitPending());
+        }
+    }
 }
 
 TEST_F(AltholdClosedLoop, S7_LandingZoneHoldKeepsTargetAfterGust)
