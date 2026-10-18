@@ -20,7 +20,7 @@
 | TJRC_10 | MATEKF722SE | F722 | 포함 | 포함 | 포함 | CRSF | CRSF | 포함 | 포함 | 포함 | 포함 | 제거 | 제거 | 디지털만 | 79.01% |
 | 8IN-KOPIS_X8 | SPEEDYBEEF7V3 | F722 | 포함 | 포함 | 제거 | CRSF | CRSF | 포함 | 포함 | 포함 | 포함 | 제거 | 제거 | 디지털만 | 76.49% |
 | CHIMERA7 | FLYWOOF722PROV2 | F722 | 포함 | 포함 | 제거 | CRSF | CRSF | 포함 | 포함 | 포함 | 포함 | 제거 | 제거 | 디지털만 | 74.21% |
-| AOS_UL7_X8 | MATEKF722HD | F722 | 포함 | 제거 | 포함 | CRSF | CRSF | 포함 | 포함 | 포함 | 포함 | 제거 | 제거 | 디지털만 | 76.79% |
+| AOS_UL7_X8 | MATEKF722HD | F722 | 포함 | **포함** | 포함 | CRSF | CRSF | 포함 | 포함 | 포함 | 포함 | 제거 | 제거 | 디지털만 | 76.79% |
 | Explorer LR4 | JHEF7DUAL | F722 | 포함 | 제거 | 포함 | CRSF | CRSF | 포함 | 포함 | 포함 | 포함 | 제거 | 제거 | 디지털만 | 76.85% |
 | **Pavo25 V2** | JHEF7DUAL | F722 | **제거 (센서 없음)** | 포함 | 제거 | CRSF | CRSF | 포함 | 포함 | 포함 | 포함 | 제거 | 제거 | 디지털만 | 73.66% |
 | X8_5INCH | MATEKH743 | H743 | 포함 | 제거 | 포함 | FPort | SmartPort | 포함 | 포함 | 포함 | 포함 | 제거 | 제거 | 디지털만 | 24.38% |
@@ -39,7 +39,7 @@
 ## 기체별 차이
 
 - **자력계**: Pavo25 V2만 제외 (센서 미장착)
-- **PINIO**: Mark4_6in, AOS_UL7_X8, Explorer LR4, X8_5INCH는 미사용이라 제거
+- **PINIO**: Mark4_6in, Explorer LR4, X8_5INCH는 미사용이라 제거. AOS_UL7_X8은 사용자 요청(2026-10-18)으로 PINIO를 다시 포함(v16 재빌드)
 - **LED 스트립**: F405 3종 + 8IN-KOPIS_X8 + Pavo25 V2는 핀/기능 없어 제거, 나머지(TJRC_10, AOS_UL7_X8, Explorer LR4, X8_5INCH)는 유지
 - **수신기/텔레메트리**: 기체마다 실제 쓰는 프로토콜만 남김 — CRSF가 대부분, Mark4_6in만 SBUS(텔레메트리 없음), AOS_UL7_O4·X8_5INCH는 FPort+SmartPort
 

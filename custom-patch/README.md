@@ -240,7 +240,7 @@ CLI 파라미터가 아니라 코드에 고정된 동작이다(PG 버전 변경 
 
 - VTX 관련: `osd_vtx_channel_pos`, `osd_sys_vtx_temp_pos` 등 (VTX 제어 기능 제거)
 - 8IN-KOPIS_X8, Pavo25 V2: `feature LED_STRIP`, `resource LED_STRIP 1 NONE`
-- PINIO를 뺀 기체(Mark4_6in, AOS_UL7_X8, Explorer LR4, X8_5INCH): 해당 CLI에 PINIO 줄이 있으면 오류
+- PINIO를 뺀 기체(Mark4_6in, Explorer LR4, X8_5INCH; AOS_UL7_X8은 2026-10-18부터 PINIO 포함): 해당 CLI에 PINIO 줄이 있으면 오류
 - 랜지파인더/트랜스폰더/GPS 랩타이머 등 CLI에 원래 없던 설정이면 해당 사항 없음
 - 서보(`servo`, `smix`), 배터리-컨티뉴(`battery_continue`), 아날로그 OSD 관련 CLI 줄(있었다면): v4부터 전 기체 공통 제거
 

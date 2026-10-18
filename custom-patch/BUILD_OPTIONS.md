@@ -28,7 +28,7 @@
 | TJRC_10 | MATEKF722SE | F722 | 포함 | 포함 (사용) | 포함 | CRSF | CRSF | ALT / GPS / POS | 79.01% |
 | 8IN-KOPIS_X8 | SPEEDYBEEF7V3 | F722 | 포함 | 포함 (사용) | 제거 (1) | CRSF | CRSF | ALT / GPS / POS | 76.49% |
 | CHIMERA7 | FLYWOOF722PROV2 | F722 | 포함 | 포함 (사용) | 제거 | CRSF | CRSF | ALT / GPS / POS | 74.21% |
-| AOS_UL7_X8 | MATEKF722HD | F722 | 포함 | **제거** | 포함 | CRSF | CRSF | ALT / GPS / POS | 76.79% |
+| AOS_UL7_X8 | MATEKF722HD | F722 | 포함 | **포함** (2026-10-18 추가) | 포함 | CRSF | CRSF | ALT / GPS / POS | 76.79% |
 | Explorer LR4 | JHEF7DUAL | F722 | 포함 | **제거** | 포함 | CRSF | CRSF | ALT / GPS / POS | 76.85% |
 | Pavo25 V2 | JHEF7DUAL | F722 | **제거** (센서 없음) | 포함 (사용) | 제거 (1) | **CRSF** | CRSF | ALT / GPS / POS | 73.66% |
 | X8_5INCH | MATEKH743 | H743 | 포함 | **제거** | 포함 | **FPort** | SmartPort (FPort 텔레메트리) | 해당 없음 | 24.38% |
@@ -463,3 +463,7 @@ v14 전체를 정적 재검토하고 폐루프 시뮬레이션(수직 운동 모
 **영향 범위**: `UARTx_RX_DMA_OPT` 기본값은 `DMA_OPT_UNUSED`(`common_defaults_post.h`)이고 `UARTx_RX_DMA_STREAM`도 기본 NULL이며, 10개 기체 `diff all`에 `dma` 설정이 없다 → 현재 기체에서는 발동하지 않는 잠재 결함. 수신 DMA를 CLI(`dma`)로 직접 켠 경우에만 영향(H743 X8_5INCH 포함). 기본 동작 변화 없음. 같은 유형의 `APM32` 쪽 한 줄(`serial_uart_apm32.c` 89행, `txDMAHandle.Init.Channel = rxDMAChannel`)은 이 기체들이 쓰지 않는 플랫폼이라 수정하지 않았다.
 
 **검증**: 코드 외 변경 없음, 호스트 유닛테스트는 해당 코드를 포함하지 않아 영향 없음(전체 46개 스위트 통과 유지). 10개 보드 `custom_v16_slim` 재빌드, 체크섬은 `SHA256SUMS.txt`.
+
+## AOS_UL7_X8 PINIO 추가 (2026-10-18, v16 재빌드)
+
+사용자 요청으로 AOS_UL7_X8 빌드에서 `-DCUSTOM_NO_PINIO`를 뺐다(`build_custom.sh`의 AOSUL7X8 줄에서 `$NO_PINIO` 제거). `USE_PINIO`/`USE_PINIOBOX`가 포함되므로 `resource PINIO`와 `pinio_box` 설정이 가능해진다. 다른 기체와 코드는 동일하다. 파일명은 그대로 `..._AOSUL7X8_custom_v16_slim.hex`(PINIO 없는 이전 v16 파일을 대체)이며 `SHA256SUMS.txt`의 해당 줄만 갱신했다. PINIO 사용 기체는 이제 7대(MARIO5, AOS_UL7_O4, AOS_UL7_X8, TJRC_10, 8IN-KOPIS_X8, CHIMERA7, Pavo25 V2). 사용하려면 플래시 후 CLI로 `resource PINIO 1 <핀>`, `pinio_box`와 Modes 설정을 직접 넣어야 한다.
